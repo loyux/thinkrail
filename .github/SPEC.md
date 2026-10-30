@@ -128,9 +128,10 @@ job on main every PR and merge group kept its own copy, about half of the reposi
 In `loyux/thinkrail`, a fork-only workflow runs daily or on manual dispatch from `main`. `main`
 retains the fork maintenance configuration and merges `JetBrains/thinkrail`'s `main`; `phone-web`
 retains the mobile adaptation and merges the resulting fork `main`. The workflow is guarded by the exact
-fork repository identity and never runs in the upstream repository. It uses the job's scoped
-`GITHUB_TOKEN`, serialized runs, full history, and ordinary non-force pushes. The sync helper runs only
-in a disposable clean checkout; it leaves that checkout detached.
+fork repository identity and never runs in the upstream repository. A dedicated repository-scoped write
+deploy key, stored as the `FORK_SYNC_SSH_KEY` Actions secret, authorizes ordinary non-force SSH pushes,
+including upstream workflow changes that `GITHUB_TOKEN` cannot write. Runs are serialized and fetch full
+history. The sync helper runs only in a disposable clean checkout; it leaves that checkout detached.
 
 A merge conflict aborts that merge and fails the run without pushing the affected branch; a concurrent
 remote update rejects the push. A successful `main` update remains published if the later `phone-web`
