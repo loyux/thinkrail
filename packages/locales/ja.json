@@ -1811,6 +1811,7 @@
 	"shell.location.workspace.settledGroup": "整理済み · {{count}}",
 	"shell.location.workspace.settledSuffix": "· 整理済み",
 	"shell.location.workspace.switchTo": "切り替え先",
+	"shell.mobile.sessions": "セッション",
 	"shell.projectHome.projects": "プロジェクト",
 	"shell.quitHint.hold": "{{shortcut}} を長押し、または 2 回押して終了",
 	"shell.quitHint.quitting": "終了中…",

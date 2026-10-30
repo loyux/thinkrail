@@ -167,7 +167,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   and tables retain their own inner scrolling. This changes presentation only:
   canonical turns and the props-driven row renderers never acquire settings state.
 - **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
-  hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,
+  **`CopyButton`** that is visible on devices without hover and revealed by hover or focus otherwise (`chat/CopyButton.tsx`,
   `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a
   user bubble, the markdown `text` for an assistant row — never the collapsed preview or any UI chrome.
   Only the **final** `markdown` row of a round is copyable, not the intermediate narration the agent emits

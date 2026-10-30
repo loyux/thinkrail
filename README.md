@@ -78,7 +78,8 @@ create the tools it needs based on how you actually work.
   and MCP servers, set them in Settings → Environment; they apply on the next start. A variable you set
   when launching (`PI_CODING_AGENT_DIR=… thinkrail`) still wins.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
-  browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
+  browser. On a phone, the browser shows one work area with project and conversation drawers. Both
+  launchers embed the same engine host; app state lives under `~/.thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English,
   Japanese, Simplified Chinese, and Spanish are built in. Add a language ThinkRail doesn't ship yet by
   dropping a translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and

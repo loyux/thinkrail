@@ -384,5 +384,4 @@ themselves.
 
 ## Later
 
-The mobile single-view shell and PWA packaging (installable, offline shell) ride on this split without
-touching panels or store.
+PWA packaging (installable, offline shell) can ride on this split without touching panels or store.

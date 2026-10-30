@@ -837,7 +837,7 @@ function SessionBlock({
 					className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<span className="min-w-0 flex-1">{t("plan.session.empty")}</span>
-					<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+					<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-100 [@media(hover:hover)]:opacity-0 transition-opacity group-hover:opacity-100">
 						<Plus className="size-14" />
 						{t("plan.session.addTask")}
 					</span>

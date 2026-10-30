@@ -36,7 +36,7 @@ export function CopyButton({
 				})();
 			}}
 			className={cn(
-				"shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
+				"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
 				className,
 			)}
 		/>

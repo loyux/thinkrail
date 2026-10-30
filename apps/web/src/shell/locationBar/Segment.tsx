@@ -34,7 +34,7 @@ export function PillChevron({ className }: { className?: string | undefined }) {
 		<ChevronDown
 			aria-hidden="true"
 			className={cn(
-				"size-14 shrink-0 text-text-subtle opacity-0 transition-opacity group-hover/pill:opacity-100 group-focus-visible/pill:opacity-100 group-data-[state=open]/pill:opacity-100",
+				"size-14 shrink-0 text-text-subtle opacity-100 [@media(hover:hover)]:opacity-0 transition-opacity group-hover/pill:opacity-100 group-focus-visible/pill:opacity-100 group-data-[state=open]/pill:opacity-100",
 				className,
 			)}
 		/>

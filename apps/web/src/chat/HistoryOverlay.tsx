@@ -107,8 +107,8 @@ function DeleteChatButton({
 					event.stopPropagation();
 					onDeleteChat(workspaceId, sessionId);
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
-					isSelected ? "opacity-100" : ""
+				className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-100 [@media(hover:hover)]:opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
+					isSelected ? "[@media(hover:hover)]:opacity-100" : ""
 				}`}
 			>
 				<Trash2 className="size-14" />
@@ -190,7 +190,7 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`shrink-0 opacity-0 group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`}
+				className={`shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 ${isSelected ? "[@media(hover:hover)]:opacity-100" : ""}`}
 			/>
 			{target ? (
 				<>
@@ -212,7 +212,7 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`shrink-0 opacity-0 group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`}
+						className={`shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 ${isSelected ? "[@media(hover:hover)]:opacity-100" : ""}`}
 					/>
 				</>
 			) : null}

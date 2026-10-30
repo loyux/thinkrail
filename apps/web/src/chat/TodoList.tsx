@@ -444,7 +444,7 @@ function TodoRow({
 					onClick={() => {
 						void onRemove(todo.id);
 					}}
-					className="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+					className="shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus:opacity-100"
 				/>
 			) : null}
 		</li>

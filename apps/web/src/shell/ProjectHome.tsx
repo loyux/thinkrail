@@ -24,7 +24,13 @@ const PROJECTS_PANE_DEFAULT_PERCENT =
 const PROJECTS_PANE_MIN_PERCENT = 12;
 const WELCOME_MIN_PERCENT = 40;
 
-export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivElement> }) {
+export function ProjectHome({
+	projects,
+	narrow,
+}: {
+	projects: CollapsibleRegion<HTMLDivElement>;
+	narrow: boolean;
+}) {
 	const {
 		collapsed,
 		contentRef,
@@ -38,6 +44,17 @@ export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivE
 	} = projects;
 	const t = useT();
 	const onboarding = useAppStore(selectOnboardingActive);
+	if (narrow && !onboarding) {
+		return (
+			<QuietScrollArea
+				data-testid="left-nav"
+				className="h-full min-h-0 bg-container-sidebar-bg"
+				viewportClassName="p-panel-inset"
+			>
+				<ProjectTree />
+			</QuietScrollArea>
+		);
+	}
 	const entry: AuxiliaryRailToolEntry = {
 		key: PROJECTS_RAIL_ENTRY_KEY,
 		region: "left",

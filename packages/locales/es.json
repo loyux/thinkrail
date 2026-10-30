@@ -1958,6 +1958,7 @@
 	"shell.location.workspace.settledGroup": "Archivados · {{count}}",
 	"shell.location.workspace.settledSuffix": "· archivado",
 	"shell.location.workspace.switchTo": "Cambiar a",
+	"shell.mobile.sessions": "Sesiones",
 	"shell.projectHome.projects": "Proyectos",
 	"shell.quitHint.hold": "Mantén {{shortcut}} o pulsa dos veces para salir",
 	"shell.quitHint.quitting": "Saliendo…",

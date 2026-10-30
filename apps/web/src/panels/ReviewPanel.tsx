@@ -386,14 +386,14 @@ function CommentRow({
 			data-testid="review-comment"
 			data-status={statusLabel(comment)}
 			data-anchor={comment.anchorState}
-			className="group relative"
+			className="group relative [@media(hover:none)]:flex"
 		>
 			<button
 				type="button"
 				data-testid="review-comment-open"
 				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
 				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
-				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
+				className="flex w-full min-w-0 items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
 					<span className="w-16 shrink-0 text-center tr-code-text text-text-subtle">
@@ -438,7 +438,7 @@ function CommentRow({
 					</span>
 				</span>
 			</button>
-			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
+			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-100 [@media(hover:hover)]:opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:static [@media(hover:none)]:shrink-0">
 				{isDraft && (
 					<>
 						<IconButton
@@ -524,7 +524,7 @@ function ResolvedRow({
 			>
 				{comment.body}
 			</span>
-			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+			<span className="flex shrink-0 items-center gap-4 opacity-100 [@media(hover:hover)]:opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 				{comment.sessionId && (
 					<IconButton
 						variant="ghost"

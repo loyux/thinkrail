@@ -1880,6 +1880,7 @@
 	"shell.location.workspace.settledGroup": "已停留 · {{count}}",
 	"shell.location.workspace.settledSuffix": "· 已沉淀",
 	"shell.location.workspace.switchTo": "切换到",
+	"shell.mobile.sessions": "会话",
 	"shell.projectHome.projects": "项目",
 	"shell.quitHint.hold": "按住 {{shortcut}} 或连按两次即可退出",
 	"shell.quitHint.quitting": "正在退出…",

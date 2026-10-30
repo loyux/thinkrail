@@ -40,7 +40,8 @@ subagent reads the same in the chat as in Finished.
 
 Every surface renders a resource as one row: kind glyph with a status dot · name (command display
 name or subagent role) · activity (the command text or the task) · state · elapsed, with Inspect/Stop
-appearing on hover and focus in place of the state text so rows never change height. A row's visual
+appearing on hover and focus in place of the state text so rows never change height. On devices without
+hover, live rows show Stop in place of the state text. A row's visual
 state collapses the wire statuses into one in-flight presentation and four settled ones:
 
 - *running* commands and *running* subagents → **Working** (primary, breathing dot); *queued* →

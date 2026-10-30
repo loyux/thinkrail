@@ -727,7 +727,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							tabIndex={-1}
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							onClick={onClose}
-							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+							className="mr-4 shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus:opacity-100"
 						/>
 					) : null}
 				</div>

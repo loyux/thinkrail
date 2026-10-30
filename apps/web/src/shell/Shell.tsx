@@ -50,6 +50,7 @@ import { SessionSwitcher } from "./SessionSwitcher";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
+import { useNarrowShell } from "./useNarrowShell";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
@@ -67,6 +68,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	const t = useT();
+	const narrow = useNarrowShell();
 	useLocalLayoutState();
 	useAttentionNotifications();
 	const status = useAppStore((s) => s.status);
@@ -251,10 +253,10 @@ export function Shell() {
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
-					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
+					<WorkspaceWorkbench workspaceId={activeWorkspaceId} narrow={narrow} />
 				</div>
 			) : (
-				<ProjectHome projects={homeProjects} />
+				<ProjectHome projects={homeProjects} narrow={narrow} />
 			)}
 			{onboardingActive ? null : analyticsConsentOpen ? (
 				<AnalyticsConsentDialog />

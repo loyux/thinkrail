@@ -55,7 +55,7 @@ export function ChangeRowActions({
 						label={t("panels.changeRowActions.menuLabel", { path })}
 						data-testid="change-row-menu"
 						wrapTrigger
-						className="mr-4 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+						className="mr-4 shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
 					/>
 				</DropdownMenuTrigger>
 			</div>

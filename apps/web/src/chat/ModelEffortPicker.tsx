@@ -419,7 +419,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							className={cn(
 								"mt-2 shrink-0",
 								!favorite &&
-									"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
+									"opacity-100 [@media(hover:hover)]:opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
 							)}
 						/>
 					) : null}

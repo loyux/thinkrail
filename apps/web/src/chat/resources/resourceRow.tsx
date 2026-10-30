@@ -397,14 +397,19 @@ export function ResourceRow({
 		resource.kind === "command" && "tr-code-text-small",
 	);
 	const meta = (
-		<span className="flex shrink-0 items-center gap-8 text-text-subtle tr-text-metadata tabular-nums group-hover:hidden group-focus-within:hidden">
+		<span
+			className={cn(
+				"flex shrink-0 items-center gap-8 text-text-subtle tr-text-metadata tabular-nums group-hover:hidden group-focus-within:hidden",
+				live && "[@media(hover:none)]:hidden",
+			)}
+		>
 			<StateText state={state} kind={resource.kind} />
 			{elapsed ? <span>{elapsed}</span> : null}
 			{exitCode !== undefined && exitCode !== null ? <ExitBadge exitCode={exitCode} /> : null}
 		</span>
 	);
 	const actions = (
-		<span className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
+		<span className="inline-flex shrink-0 items-center gap-2 [@media(hover:hover)]:hidden group-hover:inline-flex group-focus-within:inline-flex">
 			{live ? (
 				<RowActionButton
 					label={action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}

@@ -10,7 +10,7 @@ references: [module-desktop, module-contracts]
 
 ## Responsibility
 
-The responsive composition root: top-level app chrome, active-project/workspace routing, theme application, global shortcuts, region error isolation, and composition of layout-agnostic panels into one frontend-local desktop workbench frame. A future mobile shell may project the same panels differently; it must not inherit desktop docking accidentally.
+The responsive composition root: top-level app chrome, active-project/workspace routing, theme application, global shortcuts, region error isolation, and composition of layout-agnostic panels into one frontend-local desktop workbench frame.
 
 ## Boundary
 
@@ -34,6 +34,13 @@ Every child is a directory module with `index.ts` as its public surface:
 The sibling dependency graph is: `layoutState → layout`; `chatReconciliation → layout + layoutState`; `terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation + terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and `WorkspaceWorkbench` composes each active orchestration barrel with `layout`, panels, and render callbacks. Chat resource availability is isolated behind a per-session selector component; the parent workbench never subscribes to the whole `sessions` record, so a streaming runtime cannot invalidate every tab renderer and side tool behind it. Siblings import only through barrels. Tests live with the orchestration module that owns the behavior rather than making store tests import shell runtime effects.
 
 ## Composition
+
+On coarse-pointer screens below 768px the workspace projects the focused center resource as a single full-width view. Project
+navigation and the workspace's open conversations are available in a dismissible side drawer; the
+conversation drawer also offers new and recently closed chats. Selecting a conversation updates the
+normal workspace attention, while opening the drawer never changes or persists the desktop frame.
+Other desktop auxiliary rails and arrangement controls are absent. Project Home shows its project
+tree at full width, except during onboarding, which keeps the welcome flow.
 
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
 as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window

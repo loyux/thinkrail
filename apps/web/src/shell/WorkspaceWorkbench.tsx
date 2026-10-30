@@ -90,6 +90,7 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { MobileWorkbench } from "./MobileWorkbench";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -310,7 +311,13 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+export function WorkspaceWorkbench({
+	workspaceId,
+	narrow,
+}: {
+	workspaceId: string;
+	narrow: boolean;
+}) {
 	const t = useT();
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -829,112 +836,132 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					sessionId={sessionId}
 				/>
 			))}
-			<Workbench
-				workspaceId={workspaceId}
-				document={rendered.document}
-				attention={rendered.attention}
-				maxSideGroups={layoutPreferences.maxSideGroups}
-				maxBottomGroups={layoutPreferences.maxBottomGroups}
-				projectionEpoch={projectionEpoch}
-				{...(focusRequest ? { focusRequest } : {})}
-				subscribeCloseRequest={subscribeCloseRequest}
-				renderTabBody={renderTabBody}
-				renderTabAdornment={renderTabAdornment}
-				renderToolBody={renderToolBody}
-				renderEmptyCenter={renderEmptyCenter}
-				renderCenterActions={renderCenterActions}
-				onCommit={commit}
-				onAttentionChange={changeAttention}
-				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
-				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
-				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
-				chatFirstPrompts={chatFirstPrompts}
-				onRequestClose={(tab, prepare) => {
-					if (tab.kind === "terminal") {
-						const close = () => {
-							const state = useAppStore.getState();
-							if (state.removedWorkspaceIds[workspaceId]) return;
-							const latest = state.layoutDocumentsByWorkspace[workspaceId];
-							const prepared = prepare(latest);
-							if (!latest || prepared.document !== latest) {
-								void commitWorkspaceLayout(
-									workspaceId,
-									prepared.document,
-									latest ? { baseDocument: latest } : {},
-								).catch(() => {});
-							}
-							const finalState = useAppStore.getState();
-							const finalDocument = finalState.layoutDocumentsByWorkspace[workspaceId];
-							const finalAttention = finalState.layoutAttentionByWorkspace[workspaceId];
-							prepared.onAccepted(
-								finalDocument && finalAttention
-									? { document: finalDocument, attention: finalAttention }
-									: undefined,
-							);
-						};
-						const terminal = terminalByKey.get(tab.tabKey);
-						if (terminal) terminalClose.requestClose(terminal, close);
-						else close();
-						return;
+			{narrow ? (
+				<MobileWorkbench
+					workspaceId={workspaceId}
+					document={rendered.document}
+					attention={rendered.attention}
+					chatFirstPrompts={chatFirstPrompts}
+					renderTabBody={renderTabBody}
+					renderEmptyCenter={renderEmptyCenter}
+					onAttentionChange={(next) => {
+						changeAttention(next);
+						useAppStore.getState().noteNavigation(workspaceId);
+					}}
+					onNewChat={startChat}
+					onCloseChat={(sessionId) =>
+						useAppStore.getState().closeChatToHistory(sessionId, true, workspaceId)
 					}
-					const prepared = prepare();
-					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(
-						workspaceId,
-						prepared.document,
-						document ? { baseDocument: document } : {},
-					)
-						.then(() => {
-							const state = useAppStore.getState();
-							const current = state.layoutDocumentsByWorkspace[workspaceId];
-							if (
-								current &&
-								collectAllGroups(current)
-									.flatMap((group) => group.tabs)
-									.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
-							) {
-								return;
-							}
-							const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
-							prepared.onAccepted(
-								current && currentAttention
-									? { document: current, attention: currentAttention }
-									: undefined,
-							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
+					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+				/>
+			) : (
+				<Workbench
+					workspaceId={workspaceId}
+					document={rendered.document}
+					attention={rendered.attention}
+					maxSideGroups={layoutPreferences.maxSideGroups}
+					maxBottomGroups={layoutPreferences.maxBottomGroups}
+					projectionEpoch={projectionEpoch}
+					{...(focusRequest ? { focusRequest } : {})}
+					subscribeCloseRequest={subscribeCloseRequest}
+					renderTabBody={renderTabBody}
+					renderTabAdornment={renderTabAdornment}
+					renderToolBody={renderToolBody}
+					renderEmptyCenter={renderEmptyCenter}
+					renderCenterActions={renderCenterActions}
+					onCommit={commit}
+					onAttentionChange={changeAttention}
+					onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
+					readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
+					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+					chatFirstPrompts={chatFirstPrompts}
+					onRequestClose={(tab, prepare) => {
+						if (tab.kind === "terminal") {
+							const close = () => {
+								const state = useAppStore.getState();
+								if (state.removedWorkspaceIds[workspaceId]) return;
+								const latest = state.layoutDocumentsByWorkspace[workspaceId];
+								const prepared = prepare(latest);
+								if (!latest || prepared.document !== latest) {
+									void commitWorkspaceLayout(
+										workspaceId,
+										prepared.document,
+										latest ? { baseDocument: latest } : {},
+									).catch(() => {});
+								}
+								const finalState = useAppStore.getState();
+								const finalDocument = finalState.layoutDocumentsByWorkspace[workspaceId];
+								const finalAttention = finalState.layoutAttentionByWorkspace[workspaceId];
+								prepared.onAccepted(
+									finalDocument && finalAttention
+										? { document: finalDocument, attention: finalAttention }
+										: undefined,
+								);
+							};
+							const terminal = terminalByKey.get(tab.tabKey);
+							if (terminal) terminalClose.requestClose(terminal, close);
+							else close();
+							return;
+						}
+						const prepared = prepare();
+						const closedIdentity = layoutResourceIdentity(tab);
+						void commitWorkspaceLayout(
+							workspaceId,
+							prepared.document,
+							document ? { baseDocument: document } : {},
+						)
+							.then(() => {
+								const state = useAppStore.getState();
+								const current = state.layoutDocumentsByWorkspace[workspaceId];
+								if (
+									current &&
+									collectAllGroups(current)
+										.flatMap((group) => group.tabs)
+										.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
+								) {
+									return;
+								}
+								const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
+								prepared.onAccepted(
+									current && currentAttention
+										? { document: current, attention: currentAttention }
+										: undefined,
+								);
+								if (tab.kind === "chat") {
+									state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
+								} else if (
+									tab.kind === "file" ||
+									tab.kind === "diff" ||
+									tab.kind === "changes" ||
+									tab.kind === "document"
+								) {
+									for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
+										const resource = toLayoutTab(cache);
+										if (resource && layoutResourceIdentity(resource) === closedIdentity) {
+											state.closeTab(cache.id, false, false, workspaceId);
+										}
 									}
 								}
-							}
-						})
-						.catch(() => {});
-				}}
-				onNewChat={startChat}
-				onNewTerminal={(groupId, area, options) =>
-					useAppStore
-						.getState()
-						.addTerminal(
-							workspaceId,
-							undefined,
-							groupId,
-							area,
-							true,
-							undefined,
-							options?.newPaneBelow === true,
-						)
-				}
-				onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
-			/>
+							})
+							.catch(() => {});
+					}}
+					onNewChat={startChat}
+					onNewTerminal={(groupId, area, options) =>
+						useAppStore
+							.getState()
+							.addTerminal(
+								workspaceId,
+								undefined,
+								groupId,
+								area,
+								true,
+								undefined,
+								options?.newPaneBelow === true,
+							)
+					}
+					onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
+				/>
+			)}
 			{terminalClose.confirmation}
 		</div>
 	);

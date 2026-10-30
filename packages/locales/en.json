@@ -1977,6 +1977,7 @@
 	"shell.location.workspace.settledGroup": "Settled · {{count}}",
 	"shell.location.workspace.settledSuffix": "· settled",
 	"shell.location.workspace.switchTo": "Switch to",
+	"shell.mobile.sessions": "Sessions",
 	"shell.projectHome.projects": "Projects",
 	"shell.quitHint.hold": "Hold {{shortcut}} or press twice to quit",
 	"shell.quitHint.quitting": "Quitting…",
