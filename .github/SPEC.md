@@ -123,6 +123,21 @@ macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows jobs
 dependencies without the Actions cache: restoring it took longer than a fresh install, and with no Windows
 job on main every PR and merge group kept its own copy, about half of the repository's cache quota.
 
+## Fork synchronization
+
+In `loyux/thinkrail`, a fork-only workflow runs daily or on manual dispatch from `main`. `main`
+retains the fork maintenance configuration and merges `JetBrains/thinkrail`'s `main`; `phone-web`
+retains the mobile adaptation and merges the resulting fork `main`. The workflow is guarded by the exact
+fork repository identity and never runs in the upstream repository. It uses the job's scoped
+`GITHUB_TOKEN`, serialized runs, full history, and ordinary non-force pushes. The sync helper runs only
+in a disposable clean checkout; it leaves that checkout detached.
+
+A merge conflict aborts that merge and fails the run without pushing the affected branch; a concurrent
+remote update rejects the push. A successful `main` update remains published if the later `phone-web`
+merge fails. No branch is reset or rebased. Clean textual merges publish automatically without an app
+regression gate, so runtime compatibility still requires verification when consuming an update. Failures
+appear in Actions, and recovery merges are resolved and pushed manually before rerunning the workflow.
+
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes
