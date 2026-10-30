@@ -48,6 +48,10 @@ bun apps/cli/src/index.ts --host 0.0.0.0 --no-open
 `main` 保持仓库默认分支，因为定时工作流从默认分支运行。工作流仅允许在
 `loyux/thinkrail` 的 `main` 上执行。
 
+本 fork 保留 CI、CI cache 和同步工作流，已在仓库设置中停用继承的 Website、Website preview、
+Website preview cleanup 和 Release pi packages。这样同步更新不会触发原项目的网站部署或 npm 发布；
+上游工作流文件仍照常接收更新。
+
 需要立即同步时，在上述 Actions 页面选择 **Run workflow**，分支选择 `main`；也可以运行：
 
 ```bash
