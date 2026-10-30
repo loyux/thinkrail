@@ -1,6 +1,7 @@
 # phone-web 使用与更新
 
-本 fork：<https://github.com/loyux/thinkrail>  
+本 fork：<https://github.com/loyux/thinkrail>
+
 上游：<https://github.com/JetBrains/thinkrail>
 
 ## 分支约定
@@ -41,8 +42,11 @@ bun apps/cli/src/index.ts --host 0.0.0.0 --no-open
 `upstream/main` 合入 `origin/main`，再将更新后的 `main` 合入 `origin/phone-web`。
 没有新提交时不会制造空提交。合并保留手机适配和全部已有提交，不执行强制推送、重置或变基。
 
-任务使用 GitHub 自带的 `GITHUB_TOKEN`，无须添加个人令牌。`main` 保持仓库默认分支，
-因为定时工作流从默认分支运行。工作流仅允许在 `loyux/thinkrail` 的 `main` 上执行。
+任务通过本仓库专用的可写 Deploy Key 推送，私钥保存在 Actions Secret `FORK_SYNC_SSH_KEY`，
+不复用个人令牌。内置 `GITHUB_TOKEN` 无法推送工作流文件的修改，部署密钥用于覆盖这类上游更新。
+密钥仅授权本 fork；更换密钥时，需同时更新 Settings → Deploy keys 和该 Actions Secret。
+`main` 保持仓库默认分支，因为定时工作流从默认分支运行。工作流仅允许在
+`loyux/thinkrail` 的 `main` 上执行。
 
 需要立即同步时，在上述 Actions 页面选择 **Run workflow**，分支选择 `main`；也可以运行：
 
