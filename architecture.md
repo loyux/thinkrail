@@ -39,7 +39,8 @@ packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; .
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
+                    its pi-free core/ read model also backs the host's spec.graph read method and the
+                    palette's ranked section search — the engine the agent's spec_search uses)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
@@ -115,7 +116,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
    switch on: it enters Default for that setup chat, because a fresh repo has nothing to isolate yet
    ([[submodule-web-panels]]); and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
-   [[submodule-server-workspaces]]). The shell is built first,
+   [[submodule-server-workspaces]]). **A third `kind`-marked exception is ThinkRail-owned and never
+   git:** a **chat without a project** (`kind: "chat"`) is its own folder under `~/.thinkrail/chats`
+   inside the one built-in **Chats container** (`Project.kind: "chats"`, not a repository, never
+   closed), held apart in `chats.json`; files, terminal and Plan work there, nothing git-, review- or
+   spec-backed does, the host refuses every repository door for it, `GIT_CEILING_DIRECTORIES` keeps
+   git from walking up out of its folder, deleting it trashes the conversation and the folder as a
+   whole, and **Continue in workspace** hands it over — the chat's own agent writes a summary, the host
+   creates a workspace chat whose first message is that summary, and the chat keeps the link (see
+   [[submodule-server-workspaces]], [[submodule-server-host]]). The shell is built first,
    `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see

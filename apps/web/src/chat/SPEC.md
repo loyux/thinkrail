@@ -323,6 +323,31 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   know), and the pruning surfaces only when *Review turn* is clicked — as the review tab's scope-aware
   `UNKNOWN_COMMIT` notice.
 
+- `continuationRequest` / `handoff` — the two host-authored cards of **Continue in workspace**
+  (`isContinueInWorkspaceRequestMessage` / `isChatHandoffMessage`, both open a round like `reviewFix`):
+  `ContinuationRequestCard` names the target project and shows the operation's host-owned phase from
+  `ChatActions.continuationOf` — asking, summarizing, creating, "Continued in a new workspace" with
+  **Open** (`openWorkspace`), or the failure reason / "host restarted" with **Retry**
+  (`retryContinuation` asks the host again for the same project); `HandoffCard` renders the clamped
+  summary as Markdown under "Continued from “<title>”" with **Open the original chat**
+  (`openHandoffSource`, which opens through `openWorkspace` once it has the Chats container's id). The
+  renderers stay props-driven: `ChatTranscript` supplies the actions and the phase lookup from the
+  store's `chatContinuations` slice, and the app-integration module **`continuations.ts`** owns every
+  continuation read and the follow (it never imports `panels`, which reuses it). The card's lookup is a
+  pure store read; an effect in `ChatTranscript` over its cards' operation ids and the welcome generation
+  asks `chat.continuationStatus` for each one the slice does not know (a reload) — once per connection
+  (`refreshContinuation`, keyed by the welcome generation), so a read that failed is asked again on the
+  next connection, never on every render; after each welcome `useContinuations` — mounted once by
+  `Shell` — asks again for every operation still `requested`/`summarizing`/`creating` and every one this
+  client started, card or not, so a disconnect cannot strand a card mid-phase. A reply is installed only
+  on the connection it was asked on and only if no push replaced the record meanwhile (the push is
+  newer); the host's `CONTINUATION_UNKNOWN` (neither held nor linked — a restart lost it mid-flight)
+  becomes `lost`, or drops a started-here operation no card shows. Only the initiating client follows
+  `started` (`followContinuation`, once, through `openWorkspace` — a follow a reconnect overtook is armed
+  again and followed on the connection that overtook it), and a failure is told once. A Retry from the
+  card (`requestContinuation`) registers the new operation as initiated, so this client follows it like
+  the original gesture.
+
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
 re-derivation and virtualization: **every fold surface (outer activity groups, nested thinking groups, tool
@@ -507,6 +532,21 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action) — and `markResultSeen(target)`, a
   background result row reporting that the user opened it.
+  Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
+  a card opens another workspace's chat: the `start_workspace` card, Continue in workspace's Open and
+  follow, and the handoff's source. A workspace the store holds is activated under its own project while
+  that project is open (closing a project keeps its workspace rows cached, so a held row alone proves
+  nothing). An unknown one first reloads that project's `workspace.list` — `addWorkspace` drops a `workspace.created`
+  push for a project whose list was never loaded — and is activated only if that read, on the same
+  connection, shows it in a project still open, and only if neither a newer open nor any navigation while
+  the list loads (the store's `isNavigationChange`, as the palette navigator watches — so away and back
+  counts too) overtook the read: an overtaken open decides silently (`false`), so neither a slow list nor
+  a Continue follow pulls the user back from where they went. A deletion-pending, vanished or unreadable
+  workspace is never activated, and the user is told why (`gone`, a card-specific message); a reconnect
+  that overtakes the read decides nothing (`null`), so the follow is armed again. Next to
+  it sits `WorkspaceName` — an injected component that renders a workspace's **live** store
+  name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
+  card uses both and hides the open action when there is no provider.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
   cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
@@ -588,6 +628,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/highlighter.
+- **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
+  `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
+  its composer, so typing goes straight to the chat a palette pick opened.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
@@ -952,7 +995,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
-  latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+  latter reused by `panels` pre-session). Group state reads through the contracts' `isSkillGroupEnabled`
+  with `store.otherAgentSkills`, so the switches match the host gate; while that host default is off and a
+  Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
+  Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated listing
+  size (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an estimate
+  rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never lists it).
+  Up to the host listing budget's floor (`SKILL_LISTING_MIN_TOKENS`) it is the per-request cost; past it,
+  the line says each request lists at most `SKILL_LISTING_MAX_TOKENS` of it and the agent searches for the
+  rest, since the model's window sets the budget in between. Past that ceiling it turns warning colour with
+  a hint to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
   message content. Totals include delegated subagent spend, which the host records into the parent as pi
@@ -1636,7 +1688,9 @@ Unknown custom messages retain their existing behavior.
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the
   `ChatActions`/`InteractionStatesContext`/`PendingExtUiContext` providers),
-  `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  `chatPreferences.ts` (the client-local persistence adapter), **`continuations.ts`** (Continue in
+  workspace's status reads, follow and routes — the shell mounts its `useContinuations`, `panels` calls
+  its `requestContinuation`), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
   **`useFreshResults.ts`** (the per-chat "new result" seen set),
