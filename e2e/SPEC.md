@@ -87,7 +87,12 @@ headless workflow suite keeps its local PI-auth mode. Concurrent provider turns 
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
 normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
 starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
-suite. This split is load-bearing: build
+suite: the fake bin plus `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin` on POSIX; on Windows, where none of those
+exist, the fake bin plus the directory of the runner's `git.exe`, `%SystemRoot%\System32` and `%SystemRoot%`.
+Those ambient Windows directories are not lane-owned, so setup fails closed if any holds a `pi`, `central` or
+`code` under any `PATHEXT` suffix (a `.cmd` forwarder to git cannot replace them: Bun rejects cmd.exe
+metacharacters in `.cmd` arguments, which the host's `git --format=%(…)` calls carry), and every host-PATH
+`pi` guard resolves names with those suffixes. This split is load-bearing: build
 tooling may need developer-installed executables and caller environment, while exact-model preflight must
 prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
 web-identity/config source making another provider available. A drift canary derives every uppercase
@@ -610,8 +615,11 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
-restart-repaired response path) to pin six-question rounds beyond four, tall-page and restored-page reveal,
-coarse-pointer focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
+restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
+transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
+receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
+focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
 the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
 move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord

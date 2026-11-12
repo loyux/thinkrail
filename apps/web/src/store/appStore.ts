@@ -61,6 +61,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -96,6 +97,7 @@ import {
 	nullProto,
 	parseSkillInvocation,
 	randomId,
+	randomUuid,
 	readLayoutNavigationClock,
 	shallowEqualArrays,
 	tupleKey,
@@ -125,6 +127,7 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
@@ -495,6 +498,11 @@ export interface MarkedUnread {
 	held: boolean;
 }
 
+export interface ChatReadingAnchor {
+	rowId: string;
+	offset: number;
+}
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -513,6 +521,8 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	promptImages: PromptImagesState;
+	readingAnchor: ChatReadingAnchor | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -545,6 +555,8 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		promptImages: newPromptImagesState(),
+		readingAnchor: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -612,7 +624,7 @@ function settleCompactionTurn(
 ): ChatTurn[] {
 	const outcome = compactionOutcome(event);
 	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
-	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
+	if (index < 0) return [...turns, { kind: "compaction", id: randomUuid(), ...outcome }];
 	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
 }
 
@@ -657,7 +669,7 @@ function appendRetryTurn(
 			...rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)),
 			{
 				kind: "retry",
-				id: crypto.randomUUID(),
+				id: randomUuid(),
 				source,
 				attempt: event.attempt,
 				maxAttempts: event.maxAttempts,
@@ -706,7 +718,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.message.role === "assistant")
 				return {
 					...rt,
-					currentAssistantId: crypto.randomUUID(),
+					currentAssistantId: randomUuid(),
 					attemptAssistantId: null,
 					turns: clearTurnStreaming(rt.turns),
 				};
@@ -730,7 +742,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				}
 				return {
 					...rt,
-					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],
+					turns: [...rt.turns, { kind: "user", id: randomUuid(), message }],
 				};
 			}
 			return rt;
@@ -746,7 +758,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							? ame.error
 							: null;
 			if (!snapshot) return rt;
-			const id = rt.currentAssistantId ?? crypto.randomUUID();
+			const id = rt.currentAssistantId ?? randomUuid();
 			const streaming = !(ame.type === "done" || ame.type === "error");
 			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
 			return {
@@ -771,7 +783,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "backgroundCommandCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -785,7 +797,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "subagentCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -800,7 +812,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "reviewFix",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -815,7 +827,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "continuationRequest",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -829,7 +841,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "handoff",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -879,12 +891,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						text: failure.message,
 						failure: failure.failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), endedAt: Date.now() };
+				: { kind: "system", id: randomUuid(), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: insertRoundCloser(
@@ -902,7 +914,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "compaction_start":
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "compaction", id: crypto.randomUUID(), status: "running" }],
+				turns: [...rt.turns, { kind: "compaction", id: randomUuid(), status: "running" }],
 			};
 		case "compaction_end": {
 			const settled = settleCompactionTurn(rt.turns, event);
@@ -967,7 +979,7 @@ function reduceExtUi(
 			const kind = request.level === "error" ? "error" : "system";
 			return {
 				...rt,
-				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
+				turns: [...rt.turns, { kind, id: randomUuid(), text: request.message }],
 			};
 		}
 		case "setStatus": {
@@ -1149,6 +1161,7 @@ interface AppState {
 	terminalReplayKb: number;
 	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1476,6 +1489,11 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	updateChatPromptImages: (
+		sessionId: string,
+		update: (current: PromptImagesState) => PromptImagesState,
+	) => void;
+	setChatReadingAnchor: (sessionId: string, anchor: ChatReadingAnchor | null) => void;
 	dismissSessionNotice: (sessionId: string) => void;
 	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
@@ -1568,6 +1586,9 @@ function configPatch(config: AppConfig) {
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		questionPanelHeight: isQuestionPanelHeight(config.questionPanelHeight)
+			? config.questionPanelHeight
+			: DEFAULT_CONFIG.questionPanelHeight,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -2503,6 +2524,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	questionPanelHeight: DEFAULT_CONFIG.questionPanelHeight,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
@@ -4472,7 +4494,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						message: {
 							role: "user",
 							content:
@@ -4495,7 +4517,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
-				turns: [...rt.turns, { kind: "error", id: crypto.randomUUID(), text }],
+				turns: [...rt.turns, { kind: "error", id: randomUuid(), text }],
 			})),
 		),
 	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
@@ -4510,7 +4532,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							...rt,
 							turns: [
 								...rt.turns,
-								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
+								{ kind: "compaction", id: randomUuid(), status: "failed", detail },
 							],
 						};
 			}),
@@ -4606,6 +4628,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	updateChatPromptImages: (sessionId, update) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const promptImages = update(rt.promptImages);
+				return promptImages === rt.promptImages ? rt : { ...rt, promptImages };
+			}),
+		),
+	setChatReadingAnchor: (sessionId, readingAnchor) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.readingAnchor?.rowId === readingAnchor?.rowId &&
+				rt.readingAnchor?.offset === readingAnchor?.offset
+					? rt
+					: { ...rt, readingAnchor },
+			),
+		),
 	dismissSessionNotice: (sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
 	silenceNotice: (notice) =>
@@ -4876,7 +4914,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				t.durationMs === toast.durationMs,
 		);
 		if (twin) return twin.id;
-		const id = crypto.randomUUID();
+		const id = randomUuid();
 		set((s) => {
 			const next = [...s.toasts, { ...toast, id }];
 			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);
