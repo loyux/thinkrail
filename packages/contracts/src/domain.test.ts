@@ -24,7 +24,10 @@ import {
 	isPlanReviewResult,
 	isQuestionPanelHeight,
 	isRetriedAttempt,
+	isValidTemplateName,
+	isWindowsDeviceName,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	LINE_WIDTH_COLUMNS,
 	normalizeFontSettings,
 	parsePiPackageInput,
 	QUESTION_PANEL_HEIGHT_PERCENT,
@@ -138,10 +141,11 @@ describe("config defaults", () => {
 		}
 	});
 
-	test("chat and file lines default to 120-symbol pane-bounded measures", () => {
+	test("chat lines default to an 80-symbol and file lines to a 120-symbol pane-bounded measure", () => {
+		expect(LINE_WIDTH_COLUMNS).toEqual({ min: 40, max: 240, default: { chat: 80, file: 120 } });
 		expect(DEFAULT_CONFIG).toMatchObject({
-			chatLineWidth: 120,
-			fileLineWidth: 120,
+			chatLineWidth: LINE_WIDTH_COLUMNS.default.chat,
+			fileLineWidth: LINE_WIDTH_COLUMNS.default.file,
 			chatLineWidthBounded: true,
 			fileLineWidthBounded: true,
 		});
@@ -612,4 +616,57 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
 	});
+});
+
+describe("template names", () => {
+	const deviceNames = [
+		"CON",
+		"con",
+		"CON.notes",
+		"con .notes",
+		"NUL ",
+		"nul.tar.gz",
+		"PRN",
+		"AUX",
+		"COM1",
+		"com9",
+		"LPT1",
+		"lpt9",
+		"COM¹",
+		"lpt²",
+		"Lpt³.txt",
+	];
+
+	for (const name of deviceNames) {
+		test(`${JSON.stringify(name)} is a Windows device name and not a template name`, () => {
+			expect(isWindowsDeviceName(name)).toBe(true);
+			expect(isValidTemplateName(name)).toBe(false);
+		});
+	}
+
+	for (const name of ["../x", "a/b", "a\\b", ".hidden", "", "a:b", ":b", "a:", "a\0b"]) {
+		test(`rejects ${JSON.stringify(name)}`, () => {
+			expect(isValidTemplateName(name)).toBe(false);
+		});
+	}
+
+	for (const name of [
+		"greet",
+		"My_Template-2",
+		"a",
+		"foo.bar",
+		"my template",
+		"COM0",
+		"COM10",
+		"LPT10",
+		"conductor",
+		"nulled",
+		"report.con",
+		"con-notes",
+	]) {
+		test(`accepts ${JSON.stringify(name)}`, () => {
+			expect(isWindowsDeviceName(name)).toBe(false);
+			expect(isValidTemplateName(name)).toBe(true);
+		});
+	}
 });

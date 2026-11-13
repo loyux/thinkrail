@@ -15,6 +15,7 @@ import {
 	useEffect,
 	useImperativeHandle,
 	useInsertionEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -192,7 +193,6 @@ const ChatTranscript = forwardRef<
 		focusComposer: () => void;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
-		markResultSeen?: ChatActions["markResultSeen"];
 		onTryAgain: () => void;
 		historyOpen: boolean;
 		inspectorOpen: boolean;
@@ -202,6 +202,7 @@ const ChatTranscript = forwardRef<
 		openProviderSettings?: ChatActions["openProviderSettings"];
 		findModel?: ChatActions["findModel"];
 		dockTarget?: HTMLElement | null;
+		onDockedInteractionChange?: (toolCallId: string | null) => void;
 		resourcesOverlay?: ReactNode;
 	}
 >(function ChatTranscript(
@@ -213,7 +214,6 @@ const ChatTranscript = forwardRef<
 		focusComposer,
 		openSubagentTranscript,
 		resultOpener,
-		markResultSeen,
 		onTryAgain,
 		historyOpen,
 		inspectorOpen,
@@ -223,6 +223,7 @@ const ChatTranscript = forwardRef<
 		openProviderSettings,
 		findModel,
 		dockTarget,
+		onDockedInteractionChange,
 		resourcesOverlay,
 	},
 	ref,
@@ -607,6 +608,9 @@ const ChatTranscript = forwardRef<
 		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId],
 	);
 	const dockedToolCallId = dockedCall?.toolCallId;
+	useLayoutEffect(() => {
+		onDockedInteractionChange?.(dockTarget ? (dockedToolCallId ?? null) : null);
+	}, [onDockedInteractionChange, dockTarget, dockedToolCallId]);
 	const interactionContext = useMemo(
 		() => ({
 			states: interactionStates,
@@ -645,7 +649,6 @@ const ChatTranscript = forwardRef<
 			respondToTool: (toolCallId: string, response: unknown) =>
 				respondToTool(sessionId, toolCallId, response),
 			resultOpener,
-			markResultSeen,
 			revealChatElement: revealElement,
 			readMcpOutput,
 			openMcpSettings,
@@ -677,7 +680,6 @@ const ChatTranscript = forwardRef<
 			continuationOf,
 			findModel,
 			focusComposer,
-			markResultSeen,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,
@@ -730,7 +732,7 @@ const ChatTranscript = forwardRef<
 										className={cn(
 											"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
 											chatLineWidthBounded
-												? "w-full"
+												? "w-full [container-type:inline-size]"
 												: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
 										)}
 										followOutput={followOutput}
