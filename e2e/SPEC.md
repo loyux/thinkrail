@@ -386,9 +386,12 @@ covers the no-workspace branch: the fresh start screen and Project Home carry th
 plain Projects pane header with no right/bottom rail, the rail entry / Hide / `Mod+B` toggle with their
 focus endpoints, and rail/header geometry that matches the workbench across a workspace round trip.
 `keyboard-regions.spec.ts` walks the Balanced ring with `F6` / `Shift+F6` (from the composer and from
-inside xterm), asserting the one `data-region-active` root and the veil through attributes and the
-`::after` content rather than pixels, then the focus chords: `Mod+L` from a terminal, `Mod+0` in the
-workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
+inside xterm), asserting the one `data-region-active` root, its accent line and the absence of any veil
+through attributes and pseudo-element styles rather than pixels; the `F6` rhythm (a first press flashes
+the frame in place, the next moves and flashes the destination, a click never flashes, the frame clears
+on its timer, without its fade under reduced motion); then the focus chords: `Mod+L` from a terminal
+(flashing the chat's region), `Mod+0` in the workbench and on Project Home (collapsed pane included),
+`Mod+1` / `Mod+2` over a split center,
 `` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
@@ -398,6 +401,14 @@ Escape in Plan's add-task returns to its button and Show step focuses the step; 
 keeps focus across its two renderings and an entry focuses its heading; One file's Next disabling at the
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
 target while a control the user clicked away from never pulls focus back.
+`keyboard-trees.spec.ts` pins the sidebar trees' keyboard model: the Files tree is one Tab stop that
+arrows, Home/End, →/← and type-ahead walk; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
+(focus moving to the next file); after a reload `Mod+Shift+E` lands on the selected row rather than the
+first; a workspace row opens its dropdown on Shift+F10 and returns focus on Escape, renames on F2, asks
+before removal on Delete, and ← reaches its project; a chat row, in its own flat Chats tree, opens its
+menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
+open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
+(Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
 
 ## Isolation contract
 

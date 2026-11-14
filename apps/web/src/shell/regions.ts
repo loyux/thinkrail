@@ -32,17 +32,26 @@ export function orderRegions<T extends RegionBox>(regions: readonly T[]): T[] {
 
 export const REGION_SELECTOR = "[data-region]";
 const ACTIVE_ATTRIBUTE = "data-region-active";
-const TRACKING_ATTRIBUTE = "data-region-tracking";
+const FLASH_ATTRIBUTE = "data-region-flash";
+const FLASH_MS = 1500;
+const STILL_FLASH_MS = 1000;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
+const ROVING_ITEM_SELECTOR = '[role="treeitem"], [role="tab"]';
 const TERMINAL_SELECTOR = "[data-region] [data-tab-key]";
 const FRAME_BUDGET = 120;
+const BUSY_FRAME_BUDGET = 90;
+const BUSY_SELECTOR = '[aria-busy="true"]';
 
 let activeRegion: HTMLElement | null = null;
 let previousRegion: HTMLElement | null = null;
 let regionObserver: ResizeObserver | null = null;
 const lastFocused = new WeakMap<HTMLElement, HTMLElement>();
 let readyTicket = 0;
+let flashingRegion: HTMLElement | null = null;
+let flashTimer: ReturnType<typeof setTimeout> | undefined;
+let keyboardIntent = false;
 
 function isRegionKind(value: string | undefined): value is RegionKind {
 	return value !== undefined && Object.hasOwn(RING_RANK, value);
@@ -75,7 +84,8 @@ export function focusTarget(element: HTMLElement): HTMLElement | null {
 function rememberedIn(container: HTMLElement): HTMLElement | null {
 	const region = container.closest<HTMLElement>(REGION_SELECTOR);
 	const remembered = region ? lastFocused.get(region) : undefined;
-	return remembered && container.contains(remembered) && canFocus(remembered) ? remembered : null;
+	if (!remembered || !container.contains(remembered) || !canFocus(remembered)) return null;
+	return remembered.matches(ROVING_ITEM_SELECTOR) && remembered.tabIndex < 0 ? null : remembered;
 }
 
 function defaultTarget(container: HTMLElement): HTMLElement | null {
@@ -101,6 +111,19 @@ function landingTarget(region: HTMLElement): HTMLElement | null {
 	return focusTarget(region);
 }
 
+const WORKBENCH_REGION_KINDS: ReadonlySet<string> = new Set<RegionKind>([
+	"left",
+	"center",
+	"right",
+	"bottom",
+]);
+
+export function activeWorkbenchGroupId(): string | undefined {
+	if (!activeRegion || !isShown(activeRegion)) return undefined;
+	const { region, regionKind } = activeRegion.dataset;
+	return regionKind !== undefined && WORKBENCH_REGION_KINDS.has(regionKind) ? region : undefined;
+}
+
 export function regionLandingTarget(lastRegion: HTMLElement | null): HTMLElement | null {
 	const region =
 		activeRegion && isShown(activeRegion)
@@ -115,21 +138,42 @@ function focusInsideTarget(container: HTMLElement): HTMLElement | null {
 	return rememberedIn(container) ?? defaultTarget(container) ?? focusTarget(container);
 }
 
+export function regionKeyAction(state: {
+	readonly flashVisible: boolean;
+	readonly focusInActiveRegion: boolean;
+}): "flash" | "move" {
+	return !state.flashVisible && state.focusInActiveRegion ? "flash" : "move";
+}
+
+export function flashesOnArrival<T>(from: T | null, to: T, byKeyboard: boolean): boolean {
+	return byKeyboard && to !== from;
+}
+
+function clearFlash(): void {
+	clearTimeout(flashTimer);
+	flashingRegion?.removeAttribute(FLASH_ATTRIBUTE);
+	flashingRegion = null;
+}
+
+function flashRegion(region: HTMLElement): void {
+	clearFlash();
+	flashingRegion = region;
+	region.setAttribute(FLASH_ATTRIBUTE, "");
+	const still = window.matchMedia(REDUCED_MOTION_QUERY).matches;
+	flashTimer = setTimeout(clearFlash, still ? STILL_FLASH_MS : FLASH_MS);
+}
+
 function setActiveRegion(region: HTMLElement | null): void {
 	if (region === activeRegion) return;
+	clearFlash();
 	if (activeRegion) {
 		activeRegion.removeAttribute(ACTIVE_ATTRIBUTE);
 		regionObserver?.unobserve(activeRegion);
 		previousRegion = activeRegion;
 	}
 	activeRegion = region;
-	const root = document.documentElement;
-	if (!region) {
-		root.removeAttribute(TRACKING_ATTRIBUTE);
-		return;
-	}
+	if (!region) return;
 	region.setAttribute(ACTIVE_ATTRIBUTE, "");
-	root.setAttribute(TRACKING_ATTRIBUTE, "");
 	regionObserver?.observe(region);
 }
 
@@ -143,12 +187,25 @@ export function installRegionTracker(): () => void {
 		const region = target.closest<HTMLElement>(REGION_SELECTOR);
 		if (!region) return;
 		if (target !== region) lastFocused.set(region, target);
+		const from = activeRegion;
 		setActiveRegion(region);
+		if (flashesOnArrival(from, region, keyboardIntent)) flashRegion(region);
+	};
+	const onKeyDown = () => {
+		keyboardIntent = true;
+	};
+	const onPointerDown = () => {
+		keyboardIntent = false;
 	};
 	document.addEventListener("focusin", onFocusIn);
+	window.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("pointerdown", onPointerDown, true);
 	return () => {
 		document.removeEventListener("focusin", onFocusIn);
+		window.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("pointerdown", onPointerDown, true);
 		setActiveRegion(null);
+		keyboardIntent = false;
 		previousRegion = null;
 		regionObserver?.disconnect();
 		regionObserver = null;
@@ -199,6 +256,15 @@ export function focusAdjacentRegion(delta: 1 | -1): void {
 	);
 }
 
+export function pressRegionKey(delta: 1 | -1): void {
+	const region = activeRegion;
+	const focusInActiveRegion =
+		region !== null && isShown(region) && region.contains(document.activeElement);
+	const action = regionKeyAction({ flashVisible: flashingRegion !== null, focusInActiveRegion });
+	if (region && action === "flash") flashRegion(region);
+	else focusAdjacentRegion(delta);
+}
+
 export function focusCenterRegion(index: number): void {
 	focusWhenSettled(
 		regionLanding(
@@ -217,11 +283,14 @@ export function focusToolBody(
 	tool: LayoutToolId,
 	ready: (body: HTMLElement) => boolean = () => true,
 ): void {
+	let patience = BUSY_FRAME_BUDGET;
 	focusWhenSettled(() => {
 		const body = document.querySelector<HTMLElement>(
 			`${REGION_SELECTOR} [data-tool-body="${tool}"]`,
 		);
-		return body && isShown(body) && ready(body) ? focusInsideTarget(body) : null;
+		if (!body || !isShown(body) || !ready(body)) return null;
+		if (body.querySelector(BUSY_SELECTOR) && patience-- > 0) return null;
+		return focusInsideTarget(body);
 	});
 }
 

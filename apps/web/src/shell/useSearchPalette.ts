@@ -79,7 +79,8 @@ import {
 } from "./paletteCatalog";
 import { paletteNavigator } from "./paletteNavigation";
 import { focusAdjacentRegion } from "./regions";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { hasNativeShortcuts } from "./useAppShortcuts";
+import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -164,8 +165,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[protocolVersion, options.hasUpdateSettings],
 	);
 	const editors = useEditors();
-	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const [pageZoom] = useState(readNativePageZoomBridge);
+	const [tabActions] = useState(activeTabActions);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -174,7 +176,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const names = new Map(
 			projects.map((project) => [
 				project.id,
-				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+				isChatsContainer(project) ? t("search.item.noProject") : project.name,
 			]),
 		);
 		const workspaceNames = new Map<string, string>();
@@ -261,6 +263,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settled,
 			settleBlocked,
 			settingsGroups,
+			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -291,6 +294,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
 				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openShortcuts: () => store().openShortcuts(),
+				runTabAction: runActiveTabAction,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -338,6 +343,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settleBlocked,
 		nativeShortcuts,
 		pageZoom,
+		tabActions,
 		options,
 		contextProject,
 		contextRepoProject,

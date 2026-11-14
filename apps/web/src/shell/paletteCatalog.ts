@@ -1,11 +1,15 @@
 import {
 	type RemixiconComponentType,
+	RiAddBoxLine,
 	RiAddLine,
 	RiArrowLeftLine,
 	RiArrowRightLine,
 	RiChat3Line,
 	RiChatNewLine,
 	RiCheckDoubleLine,
+	RiCloseLine,
+	RiDeleteBinLine,
+	RiDragMove2Line,
 	RiEdit2Line,
 	RiExternalLinkLine,
 	RiFileCopyLine,
@@ -28,6 +32,7 @@ import {
 	RiListCheck3,
 	RiMailUnreadLine,
 	RiNodeTree,
+	RiPushpinLine,
 	RiResetLeftLine,
 	RiSearchEyeLine,
 	RiSettings3Line,
@@ -41,11 +46,17 @@ import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/con
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
-import { FOCUS_GROUP_BINDINGS, type KeybindingId, keybindingShortcut } from "../keybindings";
+import {
+	DESKTOP_KEYS,
+	FOCUS_GROUP_BINDINGS,
+	KEYBINDINGS,
+	type KeybindingId,
+	keybindingShortcut,
+} from "../keybindings";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
-import type { LayoutToolId } from "./layout";
+import type { LayoutToolId, TabAction } from "./layout";
 
 export type PaletteTool = Exclude<LayoutToolId, "projects">;
 
@@ -83,6 +94,7 @@ export interface PaletteCatalogDeps {
 	readonly settled: boolean;
 	readonly settleBlocked: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
+	readonly tabActions: readonly TabAction[];
 	readonly actions: PaletteCatalogActions;
 }
 
@@ -115,6 +127,8 @@ export interface PaletteCatalogActions {
 	readonly copyPath: (workspace: Workspace) => void;
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
 	readonly openSettings: (section?: SettingsSection) => void;
+	readonly openShortcuts: () => void;
+	readonly runTabAction: (actionId: string) => void;
 }
 
 function workCommands(deps: PaletteCatalogDeps): Command[] {
@@ -286,7 +300,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiZoomInLine,
 			keywords: ["zoom", "bigger", "larger", "scale"],
-			shortcut: { key: "=", mod: true },
+			shortcut: DESKTOP_KEYS.zoomIn,
 			run: () => pageZoom.request("in"),
 		},
 		{
@@ -295,7 +309,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiZoomOutLine,
 			keywords: ["zoom", "smaller", "scale"],
-			shortcut: { key: "-", mod: true },
+			shortcut: DESKTOP_KEYS.zoomOut,
 			run: () => pageZoom.request("out"),
 		},
 		{
@@ -304,7 +318,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiResetLeftLine,
 			keywords: ["zoom", "actual size", "100%", "scale"],
-			shortcut: { key: "Num 0", mod: true },
+			shortcut: DESKTOP_KEYS.zoomReset,
 			run: () => pageZoom.request("reset"),
 		},
 	];
@@ -392,15 +406,27 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			},
 		);
 	}
-	commands.push(...pageZoomCommands(deps), {
-		id: "settings.open",
-		title: t("commands.settings.open"),
-		group: "settings",
-		icon: RiSettings3Line,
-		keywords: ["preferences", "options"],
-		...(deps.nativeShortcuts ? { shortcut: { key: ",", mod: true } } : {}),
-		run: () => actions.openSettings(),
-	});
+	commands.push(
+		...pageZoomCommands(deps),
+		{
+			id: "settings.open",
+			title: t("commands.settings.open"),
+			group: "settings",
+			icon: RiSettings3Line,
+			keywords: ["preferences", "options"],
+			...(deps.nativeShortcuts ? { shortcut: DESKTOP_KEYS.settings } : {}),
+			run: () => actions.openSettings(),
+		},
+		{
+			id: "shortcuts.open",
+			title: t("commands.shortcuts.open"),
+			group: "settings",
+			icon: RiKeyboardLine,
+			keywords: ["keyboard", "hotkeys", "keybindings", "cheatsheet", "help"],
+			shortcut: keybindingShortcut("shortcuts.open"),
+			run: actions.openShortcuts,
+		},
+	);
 	return commands;
 }
 
@@ -488,8 +514,67 @@ function workspaceCommands(deps: PaletteCatalogDeps): Command[] {
 	return commands;
 }
 
+const TAB_SECTION_ICONS = {
+	tab: RiPushpinLine,
+	copy: RiFileCopyLine,
+	split: RiLayoutColumnLine,
+	move: RiDragMove2Line,
+	newGroup: RiAddBoxLine,
+	regionGroup: RiAddBoxLine,
+	tools: RiLayoutRightLine,
+	group: RiDeleteBinLine,
+} as const satisfies Record<TabAction["section"], RemixiconComponentType>;
+
+const HIDE_ICONS = {
+	left: RiLayoutLeftLine,
+	right: RiLayoutRightLine,
+	bottom: RiLayoutBottomLine,
+} as const;
+
+function tabActionIcon({ effect, section }: TabAction): RemixiconComponentType {
+	switch (effect.kind) {
+		case "close":
+			return RiCloseLine;
+		case "rename":
+			return RiEdit2Line;
+		case "focusGroup":
+			return effect.delta < 0 ? RiArrowLeftLine : RiArrowRightLine;
+		case "hide":
+			return HIDE_ICONS[effect.region];
+		default:
+			return TAB_SECTION_ICONS[section];
+	}
+}
+
+function isKeybindingId(id: string): id is KeybindingId {
+	return Object.hasOwn(KEYBINDINGS, id);
+}
+
+function tabCommands({ t, tabActions, nativeShortcuts, actions }: PaletteCatalogDeps): Command[] {
+	return tabActions
+		.filter((action) => action.surface !== "menu" && action.unavailable === undefined)
+		.map(
+			(action): Command => ({
+				id: action.id,
+				title: action.id === "tab.close" ? t("commands.tab.close") : action.label,
+				group: "tab",
+				icon: tabActionIcon(action),
+				keywords: ["tab", "editor", "group", "pane"],
+				...(isKeybindingId(action.id)
+					? { shortcut: keybindingShortcut(action.id, { browser: !nativeShortcuts }) }
+					: {}),
+				run: () => actions.runTabAction(action.id),
+			}),
+		);
+}
+
 export function buildCommands(deps: PaletteCatalogDeps): Command[] {
-	return [...workCommands(deps), ...viewCommands(deps), ...workspaceCommands(deps)];
+	return [
+		...workCommands(deps),
+		...viewCommands(deps),
+		...workspaceCommands(deps),
+		...tabCommands(deps),
+	];
 }
 
 function settingsSectionItems(group: SettingsNavGroup, deps: PaletteCatalogDeps): PaletteItem[] {

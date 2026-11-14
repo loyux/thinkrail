@@ -3,6 +3,7 @@ import {
 	RiFileCopy2Line as CopyEntry,
 	RiArrowGoBackLine,
 	RiAtLine,
+	RiChat3Line,
 	RiClipboardLine,
 	RiDeleteBinLine,
 	RiEditLine,
@@ -31,7 +32,15 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	type ReactElement,
+	type ReactNode,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
 import {
@@ -46,7 +55,8 @@ import { getTransport } from "../transport";
 import {
 	discardArtifact,
 	mentionArtifact,
-	restoreArtifact,
+	openArtifact,
+	restoreDeletedArtifact,
 	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
@@ -62,6 +72,7 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { openChatInTab } from "./openChat";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
+import { Tree, treeRowControlProps, treeRowKey, useTreeItem } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useInlineRename } from "./workspaceActions";
 
@@ -72,6 +83,7 @@ interface RemovalRequest {
 }
 
 type RequestRemoval = (path: string, kept: boolean) => void;
+type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 
 export function ArtifactsPanel({
 	workspaceId,
@@ -112,6 +124,11 @@ export function ArtifactsPanel({
 		[snapshot, sessionId, highlightSince, showIgnored, specs],
 	);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
+	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
+	const openArtifactKept = (path: string) => {
+		const artifact = snapshot?.artifacts.find((entry) => entry.path === path);
+		if (artifact) void openArtifact(workspaceId, artifact, "keep");
+	};
 
 	if (unsupported) {
 		return (
@@ -204,7 +221,9 @@ export function ArtifactsPanel({
 								testid="artifacts-section"
 								focusList="artifacts"
 								title={t("panels.artifacts.sectionArtifacts")}
+								label={t("panels.artifacts.artifactsTree")}
 								count={rows.artifacts.length}
+								onOpenKept={openArtifactKept}
 							>
 								{rows.artifacts.map((row) => (
 									<ArtifactRowView
@@ -221,7 +240,10 @@ export function ArtifactsPanel({
 								testid="artifacts-outputs-section"
 								focusList="artifacts-outputs"
 								title={t("panels.artifacts.sectionOutputs")}
+								label={t("panels.artifacts.outputsTree")}
 								count={rows.outputs.length}
+								focusDefault={rows.artifacts.length === 0}
+								onOpenKept={openKept}
 							>
 								{rows.outputs.map((row) => (
 									<OutputRowView
@@ -289,13 +311,19 @@ function Section({
 	testid,
 	focusList,
 	title,
+	label,
 	count,
+	focusDefault = true,
+	onOpenKept,
 	children,
 }: {
 	testid: string;
 	focusList: string;
 	title: string;
+	label: string;
 	count: number;
+	focusDefault?: boolean;
+	onOpenKept: (path: string) => void;
 	children: ReactNode;
 }) {
 	return (
@@ -304,9 +332,15 @@ function Section({
 				<span>{title}</span>
 				<span>{count}</span>
 			</h3>
-			<ul data-focus-list={focusList} className="flex flex-col">
+			<Tree
+				label={label}
+				focusList={focusList}
+				className="flex flex-col"
+				focusDefault={focusDefault}
+				onOpenKept={onOpenKept}
+			>
 				{children}
-			</ul>
+			</Tree>
 		</section>
 	);
 }
@@ -336,6 +370,7 @@ function ChatChip({ workspaceId, sessionId }: { workspaceId: string; sessionId: 
 		<button
 			type="button"
 			data-testid="artifact-chat"
+			{...treeRowControlProps}
 			title={t("panels.artifacts.openChat", { chat: title })}
 			onClick={() => void openChatInTab(workspaceId, sessionId)}
 			className="min-w-0 max-w-full shrink truncate rounded-sm bg-control-bg px-4 text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
@@ -363,14 +398,16 @@ function ArtifactRowView({
 		onRename: (_target, next) => void renameEntry(workspaceId, artifact.path, next),
 	});
 	const Icon = artifactIcon(row);
-	const open = (intent: "preview" | "keep") =>
-		void openFileInTab(workspaceId, artifact.path, intent);
+	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
+	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: true });
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })
 			: folder;
 	return (
 		<li
+			role="none"
 			data-testid="artifact-row"
 			data-path={artifact.path}
 			data-focus-row={artifact.path}
@@ -380,13 +417,15 @@ function ArtifactRowView({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={artifact.path}
-				deleted={deleted}
+				onRestore={deleted ? restore : undefined}
+				sessionId={artifact.sessionId}
 				onRename={start}
 				onRemove={(path) => onRemove(path, deleted)}
 				onCloseAutoFocus={onMenuCloseAutoFocus}
 			>
-				{(menuOpen) => (
+				{(menuOpen, onRowKeyDown) => (
 					<div
+						role="none"
 						title={artifactTimeLabel(t, artifact.changedAt)}
 						className={cn(
 							"flex w-full min-w-0 items-start gap-8 rounded-sm px-4 py-4",
@@ -410,11 +449,12 @@ function ArtifactRowView({
 								) : (
 									<button
 										type="button"
+										{...treeItem}
 										data-testid="artifact-open"
 										data-focus-row-primary
-										disabled={deleted}
 										onClick={firstClickOnly(() => open("preview"))}
 										onDoubleClick={() => open("keep")}
+										onKeyDown={onRowKeyDown}
 										className={cn(
 											"min-w-0 flex-1 truncate text-left tr-text-ui focus-visible:focus-ring-inset",
 											deleted ? "text-text-subtle line-through" : "text-text-default",
@@ -434,7 +474,8 @@ function ArtifactRowView({
 										<button
 											type="button"
 											data-testid="artifact-restore"
-											onClick={() => void restoreArtifact(workspaceId, artifact.path)}
+											{...treeRowControlProps}
+											onClick={restore}
 											className="shrink-0 text-primary hover:underline"
 										>
 											{t("panels.artifacts.restore")}
@@ -471,6 +512,7 @@ function OutputRowView({
 	const node: FileNode = { path: output.path, name: output.path, kind: output.kind };
 	return (
 		<li
+			role="none"
 			data-testid="artifact-output"
 			data-path={output.path}
 			data-focus-row={output.path}
@@ -478,6 +520,7 @@ function OutputRowView({
 		>
 			<OutputNode
 				node={node}
+				level={1}
 				workspaceId={workspaceId}
 				onRemove={onRemove}
 				trailing={
@@ -499,11 +542,13 @@ function OutputRowView({
 
 function OutputNode({
 	node,
+	level,
 	workspaceId,
 	onRemove,
 	trailing,
 }: {
 	node: FileNode;
+	level: number;
 	workspaceId: string;
 	onRemove: RequestRemoval;
 	trailing?: ReactNode;
@@ -521,12 +566,13 @@ function OutputNode({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={node.path}
-				deleted={false}
 				onRemove={(path) => onRemove(path, false)}
 			>
-				{(menuOpen) => (
+				{(menuOpen, onRowKeyDown) => (
 					<TreeRow
 						testid="artifact-output-node"
+						treeId={node.path}
+						level={level}
 						kind={isDir ? "dir" : "file"}
 						expanded={expanded}
 						highlighted={menuOpen}
@@ -540,20 +586,29 @@ function OutputNode({
 						onDoubleClick={
 							isDir ? undefined : () => void openFileInTab(workspaceId, node.path, "keep")
 						}
+						onKeyDown={onRowKeyDown}
 					/>
 				)}
 			</EntryMenu>
 			{isDir && expanded ? (
 				<ul
+					role="none"
 					data-focus-list={`artifacts-outputs:${node.path}`}
 					className="flex flex-col pl-tree-indent"
 				>
 					{children === null ? (
-						<LoadingRegion rows={2} className="px-4 py-4" />
+						<li role="none">
+							<LoadingRegion rows={2} className="px-4 py-4" />
+						</li>
 					) : (
 						children.map((child) => (
-							<li key={child.path} data-focus-row={child.path}>
-								<OutputNode node={child} workspaceId={workspaceId} onRemove={onRemove} />
+							<li key={child.path} role="none" data-focus-row={child.path}>
+								<OutputNode
+									node={child}
+									level={level + 1}
+									workspaceId={workspaceId}
+									onRemove={onRemove}
+								/>
 							</li>
 						))
 					)}
@@ -566,7 +621,8 @@ function OutputNode({
 function EntryMenu({
 	workspaceId,
 	path,
-	deleted,
+	onRestore,
+	sessionId,
 	onRename,
 	onRemove,
 	onCloseAutoFocus,
@@ -574,14 +630,16 @@ function EntryMenu({
 }: {
 	workspaceId: string;
 	path: string;
-	deleted: boolean;
+	onRestore?: (() => void) | undefined;
+	sessionId?: string | undefined;
 	onRename?: () => void;
 	onRemove: (path: string) => void;
 	onCloseAutoFocus?: (event: Event) => void;
-	children: (menuOpen: boolean) => ReactElement;
+	children: (menuOpen: boolean, onRowKeyDown: RowKeyDown) => ReactElement;
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const deleted = onRestore !== undefined;
 	const mentionOnCloseRef = useRef(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
 	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
@@ -593,10 +651,18 @@ function EntryMenu({
 		useAppStore
 			.getState()
 			.setFileClipboard(cut ? { workspaceId, path, cut } : { workspaceId, path });
+	const rename = mutations && !deleted ? onRename : undefined;
+	const onRowKeyDown: RowKeyDown = (event) => {
+		const key = treeRowKey(event);
+		if (key === "delete" && mutations) onRemove(path);
+		else if (key === "rename" && rename) rename();
+		else return;
+		event.preventDefault();
+	};
 	return (
 		<ContextMenu open={open} onOpenChange={setOpen}>
 			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
-				{children(open)}
+				{children(open, onRowKeyDown)}
 			</ContextMenuTrigger>
 			<ContextMenuContent
 				data-testid="artifact-actions"
@@ -608,10 +674,7 @@ function EntryMenu({
 				}}
 			>
 				{deleted ? (
-					<ContextMenuItem
-						data-testid="artifact-menu-restore"
-						onSelect={() => void restoreArtifact(workspaceId, path)}
-					>
+					<ContextMenuItem data-testid="artifact-menu-restore" onSelect={onRestore}>
 						<RiArrowGoBackLine />
 						{t("panels.artifacts.restore")}
 					</ContextMenuItem>
@@ -637,6 +700,7 @@ function EntryMenu({
 						</ContextMenuItem>
 					</>
 				)}
+				{sessionId ? <OpenChatItem workspaceId={workspaceId} sessionId={sessionId} /> : null}
 				<ContextMenuSeparator />
 				<ContextMenuItem data-testid="artifact-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
@@ -657,8 +721,8 @@ function EntryMenu({
 							<RiScissorsCutLine />
 							{t("panels.fileTree.cut")}
 						</ContextMenuItem>
-						{onRename ? (
-							<ContextMenuItem data-testid="artifact-rename" onSelect={onRename}>
+						{rename ? (
+							<ContextMenuItem data-testid="artifact-rename" onSelect={rename}>
 								<RiEditLine />
 								{t("panels.artifacts.rename")}
 							</ContextMenuItem>
@@ -684,6 +748,20 @@ function EntryMenu({
 				) : null}
 			</ContextMenuContent>
 		</ContextMenu>
+	);
+}
+
+function OpenChatItem({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+	const t = useT();
+	const title = useAppStore((s) => selectChatTitle(t, s, workspaceId, sessionId));
+	return (
+		<ContextMenuItem
+			data-testid="artifact-open-chat"
+			onSelect={() => void openChatInTab(workspaceId, sessionId)}
+		>
+			<RiChat3Line />
+			{t("panels.artifacts.openChat", { chat: title })}
+		</ContextMenuItem>
 	);
 }
 

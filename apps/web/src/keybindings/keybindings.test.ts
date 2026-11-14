@@ -11,6 +11,8 @@ import {
 
 type Modifiers = Partial<Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey", boolean>>;
 
+type Chord = (typeof KEYBINDINGS)[KeybindingId][number];
+
 const PLATFORMS = {
 	apple: "MacIntel",
 	windows: "Win32",
@@ -18,13 +20,19 @@ const PLATFORMS = {
 	other: "",
 } as const;
 
-const press = (code: string, modifiers: Modifiers = {}) => ({
+const press = (code: string, modifiers: Modifiers = {}, key = "") => ({
 	code,
+	key,
 	ctrlKey: false,
 	metaKey: false,
 	altKey: false,
 	shiftKey: false,
 	...modifiers,
+});
+
+const withAltGraph = (event: ReturnType<typeof press>) => ({
+	...event,
+	getModifierState: (key: string) => key === "AltGraph",
 });
 
 const entries = Object.entries(KEYBINDINGS) as [KeybindingId, (typeof KEYBINDINGS)[KeybindingId]][];
@@ -57,7 +65,17 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		).toBeNull();
 	});
 
-	test("Mod+K rejects Shift and Alt, and only Mod+N accepts Alt", () => {
+	test("Mod+K rejects Shift and Alt, and Alt belongs only to the listed aliases and tab moves", () => {
+		const altBindings = entries
+			.filter(([, chords]) => chords.some((chord: Chord) => chord.alt === true))
+			.map(([id]) => id)
+			.sort();
+		expect(altBindings).toEqual([
+			"tab.close",
+			"tab.moveToNextGroup",
+			"tab.moveToPreviousGroup",
+			"workspace.new",
+		]);
 		expect(matchKeybinding(press("KeyK", { ...mod, shiftKey: true }), platform)).toBeNull();
 		expect(matchKeybinding(press("KeyK", { ...mod, altKey: true }), platform)).toBeNull();
 		expect(matchKeybinding(press("KeyB", { ...mod, altKey: true }), platform)).toBeNull();
@@ -68,6 +86,44 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		expect(
 			matchKeybinding(press("KeyF", { ...mod, shiftKey: true, altKey: true }), platform),
 		).toBeNull();
+	});
+
+	test("Mod+Alt+W closes a tab and Mod+\\ splits right, while Mod+W stays the native owner's", () => {
+		expect(matchKeybinding(press("KeyW", { ...mod, altKey: true }), platform)).toBe("tab.close");
+		expect(matchKeybinding(press("KeyW", mod), platform)).toBeNull();
+		expect(
+			matchKeybinding(press("KeyW", { ...mod, altKey: true, shiftKey: true }), platform),
+		).toBeNull();
+		expect(matchKeybinding(press("Backslash", mod), platform)).toBe("group.splitRight");
+		expect(matchKeybinding(press("Backslash", { ...mod, shiftKey: true }), platform)).toBeNull();
+		expect(matchKeybinding(press("Backslash", { ...mod, altKey: true }), platform)).toBeNull();
+	});
+
+	test("move a tab with Ctrl+Cmd+arrows on Apple and Ctrl+Alt+arrows elsewhere", () => {
+		const move: Modifiers =
+			family === "apple" ? { ctrlKey: true, metaKey: true } : { ctrlKey: true, altKey: true };
+		const foreign: Modifiers =
+			family === "apple" ? { ctrlKey: true, altKey: true } : { ctrlKey: true, metaKey: true };
+		expect(matchKeybinding(press("ArrowLeft", move), platform)).toBe("tab.moveToPreviousGroup");
+		expect(matchKeybinding(press("ArrowRight", move), platform)).toBe("tab.moveToNextGroup");
+		expect(matchKeybinding(press("ArrowRight", foreign), platform)).toBeNull();
+		expect(matchKeybinding(press("ArrowRight", mod), platform)).toBeNull();
+		expect(matchKeybinding(press("ArrowRight", { ...move, shiftKey: true }), platform)).toBeNull();
+	});
+
+	test("no Alt chord matches while AltGraph is held, except on Apple where Option reports it", () => {
+		const altGr: Modifiers = { ctrlKey: true, altKey: true };
+		for (const code of ["KeyN", "KeyW", "ArrowLeft", "ArrowRight"]) {
+			const unguarded = family === "apple" ? matchKeybinding(press(code, altGr), platform) : null;
+			expect(matchKeybinding(withAltGraph(press(code, altGr)), platform)).toBe(unguarded);
+		}
+		expect(matchKeybinding(withAltGraph(press("KeyN", { ...mod, altKey: true })), platform)).toBe(
+			family === "apple" ? "workspace.new" : null,
+		);
+		expect(matchKeybinding(withAltGraph(press("KeyW", { ...mod, altKey: true })), platform)).toBe(
+			family === "apple" ? "tab.close" : null,
+		);
+		expect(matchKeybinding(withAltGraph(press("KeyB", mod)), platform)).toBe("view.toggleLeft");
 	});
 
 	test("region, focus and tool chords match on their physical keys", () => {
@@ -126,20 +182,63 @@ test("every chord resolves to its own binding and no two bindings share a chord 
 		const apple = platform === PLATFORMS.apple;
 		const owners = new Map<string, KeybindingId>();
 		for (const [id, chords] of entries) {
-			for (const chord of chords) {
-				const event = press(chord.code, {
-					ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
-					metaKey: chord.mod === true && apple,
-					shiftKey: chord.shift === true,
-					altKey: chord.alt === true,
-				});
+			for (const chord of chords as readonly Chord[]) {
+				if (chord.platform !== undefined && (chord.platform === "apple") !== apple) continue;
+				const event = press(
+					chord.code ?? "",
+					{
+						ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
+						metaKey: chord.mod === true && apple,
+						shiftKey: chord.shift === true,
+						altKey: chord.alt === true,
+					},
+					chord.typed ? chord.key : "",
+				);
 				const signature = JSON.stringify(event);
 				expect(owners.get(signature) ?? id).toBe(id);
 				owners.set(signature, id);
-				expect(matchKeybinding(event, platform)).toBe(id);
+				expect(matchKeybinding(event, platform)).toBe(chord.displayOnly ? null : id);
 			}
 		}
 	}
+});
+
+describe("Mod+? matches the typed question mark on any layout", () => {
+	const linux = PLATFORMS.linux;
+	const typed = (code: string, key: string, modifiers: Modifiers) =>
+		matchKeybinding(press(code, modifiers, key), linux);
+
+	test("US Ctrl+Shift+/, Russian Ctrl+Shift+7 and German Ctrl+Shift+ß all type ? and open it", () => {
+		const ctrlShift: Modifiers = { ctrlKey: true, shiftKey: true };
+		expect(typed("Slash", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(typed("Digit7", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(typed("Minus", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(
+			matchKeybinding(press("Slash", { metaKey: true, shiftKey: true }, "?"), PLATFORMS.apple),
+		).toBe("shortcuts.open");
+	});
+
+	test("the physical Slash key does not open it where it types something else", () => {
+		const ctrlShift: Modifiers = { ctrlKey: true, shiftKey: true };
+		expect(typed("Slash", ",", ctrlShift)).toBeNull();
+		expect(typed("Slash", "_", ctrlShift)).toBeNull();
+		expect(typed("Slash", "/", { ctrlKey: true })).toBeNull();
+		expect(typed("Minus", "-", { ctrlKey: true })).toBeNull();
+	});
+
+	test("Alt, a foreign modifier or no modifier never opens it", () => {
+		expect(typed("Slash", "?", { shiftKey: true })).toBeNull();
+		expect(typed("Slash", "?", { ctrlKey: true, shiftKey: true, altKey: true })).toBeNull();
+		expect(typed("Slash", "?", { metaKey: true, shiftKey: true })).toBeNull();
+		expect(
+			matchKeybinding(press("Slash", { ctrlKey: true, shiftKey: true }, "?"), PLATFORMS.apple),
+		).toBeNull();
+	});
+
+	test("is shown as Mod+?", () => {
+		expect(keybindingLabel("shortcuts.open", { platform: PLATFORMS.apple })).toBe("⌘?");
+		expect(keybindingLabel("shortcuts.open", { platform: PLATFORMS.windows })).toBe("Ctrl+?");
+	});
 });
 
 describe("keybinding shortcuts", () => {
@@ -158,6 +257,39 @@ describe("keybinding shortcuts", () => {
 		expect(keybindingShortcut("focus.terminal")).toEqual({ key: "`", ctrl: true });
 		expect(keybindingShortcut("view.files")).toEqual({ key: "E", mod: true, shift: true });
 		expect(keybindingShortcut("view.changes")).toEqual({ key: "G", mod: true, shift: true });
+		expect(keybindingShortcut("group.splitRight")).toEqual({ key: "\\", mod: true });
+	});
+
+	test("Close tab shows the native Mod+W on desktop and the Mod+Alt+W alias in a browser", () => {
+		expect(keybindingShortcut("tab.close")).toEqual({ key: "W", mod: true });
+		expect(keybindingShortcut("tab.close", { browser: true })).toEqual({
+			key: "W",
+			mod: true,
+			alt: true,
+		});
+		expect(keybindingLabel("tab.close", { platform: PLATFORMS.apple })).toBe("⌘W");
+		expect(keybindingLabel("tab.close", { browser: true, platform: PLATFORMS.linux })).toBe(
+			"Ctrl+Alt+W",
+		);
+	});
+
+	test("a platform-scoped chord is shown only on its platform", () => {
+		expect(keybindingShortcut("tab.moveToNextGroup", { platform: PLATFORMS.apple })).toEqual({
+			key: "→",
+			ctrl: true,
+			mod: true,
+		});
+		expect(keybindingShortcut("tab.moveToNextGroup", { platform: PLATFORMS.windows })).toEqual({
+			key: "→",
+			ctrl: true,
+			alt: true,
+		});
+		expect(keybindingLabel("tab.moveToPreviousGroup", { platform: PLATFORMS.apple })).toBe("⌃⌘←");
+		expect(keybindingLabel("tab.moveToPreviousGroup", { platform: PLATFORMS.linux })).toBe(
+			"Ctrl+Alt+←",
+		);
+		expect(keybindingLabels("tab.moveToNextGroup", PLATFORMS.apple)).toEqual(["⌃⌘→"]);
+		expect(keybindingLabels("tab.moveToNextGroup", PLATFORMS.windows)).toEqual(["Ctrl+Alt+→"]);
 	});
 
 	test("New workspace shows Mod+N where the page receives it and Mod+Alt+N in a browser", () => {

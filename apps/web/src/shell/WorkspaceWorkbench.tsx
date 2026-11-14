@@ -23,6 +23,7 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { keybindingKeys } from "../keybindings";
 import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -74,7 +75,6 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { subscribeCloseRequest } from "./closeRequestChannel";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -86,6 +86,7 @@ import {
 	type LayoutToolId,
 	showingAuxiliaryKey,
 	Workbench,
+	type WorkbenchChromeShortcuts,
 	type WorkspaceLayoutDocument,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
@@ -97,9 +98,12 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
+import { registerTabCommands } from "./workbenchCommands";
 
 function PlanSummaryAutoDraft({
 	workspaceId,
@@ -335,6 +339,18 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
+function workbenchChromeShortcuts(): WorkbenchChromeShortcuts {
+	return {
+		hide: {
+			left: keybindingKeys("view.toggleLeft"),
+			right: keybindingKeys("view.toggleRight"),
+			bottom: keybindingKeys("view.toggleBottom"),
+		},
+		tools: { projects: keybindingKeys("focus.projects"), files: keybindingKeys("view.files") },
+		terminal: keybindingKeys("focus.terminal"),
+	};
+}
+
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
 	const status = useAppStore((state) => state.status);
@@ -384,6 +400,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		void ChatView.preload();
 	}, []);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
+	const [chromeShortcuts] = useState(workbenchChromeShortcuts);
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -680,7 +697,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					className="h-full"
 					viewportClassName="p-panel-inset"
 				>
-					<ProjectTree />
+					<ProjectTree nativeShortcuts={hasNativeShortcuts()} />
 				</QuietScrollArea>
 			),
 			specs: isChat ? (
@@ -926,7 +943,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
-				subscribeCloseRequest={subscribeCloseRequest}
+				registerTabCommands={registerTabCommands}
+				chromeShortcuts={chromeShortcuts}
+				renderLeftRailFooter={renderShortcutsRailButton}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}

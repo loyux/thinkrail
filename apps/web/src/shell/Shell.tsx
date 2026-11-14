@@ -58,6 +58,7 @@ import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } 
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import {
+	closeActiveItem,
 	focusCenterGroup,
 	focusChatComposer,
 	focusProjects,
@@ -75,13 +76,15 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { focusAdjacentRegion, installRegionTracker } from "./regions";
+import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { ShortcutsDialogHost, ShortcutsReference } from "./ShortcutsDialog";
+import { hasNativeShortcuts, readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
+import { runActiveTabAction } from "./workbenchCommands";
 
 const STATUS_LABEL = {
 	connected: "shell.connection.connected",
@@ -144,6 +147,9 @@ export function Shell() {
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => keybindingLabel("search.open"));
+	const [newWorkspaceShortcut] = useState(() =>
+		keybindingLabel("workspace.new", { browser: !hasNativeShortcuts() }),
+	);
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -214,13 +220,17 @@ export function Shell() {
 					onTerminal: focusTerminal,
 					onFiles: () => showFiles("all"),
 					...(activeChat ? {} : { onChanges: () => showFiles("changed") }),
+					onSplitRight: runActiveTabAction,
+					onMoveTab: runActiveTabAction,
 				}
 			: {}),
+		onCloseTab: closeActiveItem,
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
+		onShortcuts: () => useAppStore.getState().openShortcuts(),
 		onFindInFiles: openFindInFiles,
-		onNextRegion: () => focusAdjacentRegion(1),
-		onPreviousRegion: () => focusAdjacentRegion(-1),
+		onNextRegion: () => pressRegionKey(1),
+		onPreviousRegion: () => pressRegionKey(-1),
 		onComposer: focusChatComposer,
 		onFocusProjects: () => focusProjects(homeProjects.toggle),
 	});
@@ -247,6 +257,7 @@ export function Shell() {
 							branchStatus={branchStatus}
 							noteOpenReview={noteOpenReview}
 							refreshBranchStatus={refreshBranchStatus}
+							newWorkspaceShortcut={newWorkspaceShortcut}
 							onNewWorkspace={() => openNewWork()}
 						/>
 					) : null}
@@ -315,7 +326,9 @@ export function Shell() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
-					keyboardSettings={<SearchSettings />}
+					keyboardSettings={
+						<SearchSettings shortcuts={<ShortcutsReference className="max-h-[32rem]" />} />
+					}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspace !== null ? (
@@ -362,6 +375,7 @@ export function Shell() {
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />

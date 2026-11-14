@@ -252,9 +252,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   labels or a still-queued open, but cannot recreate a locally closed placement or steal focus.
   **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s
+  `setTitle`; each caller first folds an absent name to the empty untitled name (worded at render by `lib`'s
   `chatDisplayName`, as `selectChatTitle` does; `selectChatName` returns the stored name, and
-  `workspaceName(t, ws)` words the host-named default workspace); update the cached `ChatTab` and the same
+  `workspaceName(t, ws)` words the host-named default workspace) — `setTitle` folds any non-string, since
+  a host older than #1356 forwards one and a non-string name reaches the app-level error boundary; update
+  the cached `ChatTab` and the same
   session's `PlanTab` (each with its existing local placement and any queued open, matched by resource
   identity), and/or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
@@ -561,7 +563,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
   **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
   remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
-  component state, never store state. The
+  component state, never store state. The ephemeral **`shortcutsOpen`** plus **`openShortcuts()`** /
+  **`closeShortcuts()`** is the keyboard-shortcuts dialog's render flag ([[submodule-web-shell]]), so its
+  chord, the rail icon and the palette row open the one instance; its filter and section order stay
+  component state. The
   client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
   `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift
   IME conflicts belong to the client — the desktop adapter keeps it per backend profile and window, a
