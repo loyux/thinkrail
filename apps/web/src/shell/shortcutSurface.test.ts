@@ -11,7 +11,11 @@ test("the focused element names the surface the cheatsheet lists first", () => {
 	expect(shortcutSurfaceOf(inside('[role="tab"]'))).toBe("tabs");
 	expect(shortcutSurfaceOf(inside('[role="tablist"]'))).toBe("tabs");
 	expect(shortcutSurfaceOf(inside('[data-testid="changes-review"]'))).toBe("review");
+	expect(shortcutSurfaceOf(inside("[data-review-surface]"))).toBe("review");
+	expect(shortcutSurfaceOf(inside('[data-testid="review-thread-card"]'))).toBe("review");
 	expect(shortcutSurfaceOf(inside('[data-testid="chat-composer"]'))).toBe("composer");
+	expect(shortcutSurfaceOf(inside("[data-transcript-feed]"))).toBe("transcript");
+	expect(shortcutSurfaceOf(inside('[data-testid="history-overlay"]'))).toBe("history");
 	expect(shortcutSurfaceOf(inside(".xterm"))).toBe("terminal");
 	expect(shortcutSurfaceOf(inside("[data-rail-entry]"))).toBe("panels");
 	expect(shortcutSurfaceOf(inside("[data-rail-action]"))).toBeNull();
@@ -24,4 +28,5 @@ test("a feature surface outranks a generic tree or tab role around it", () => {
 		"review",
 	);
 	expect(shortcutSurfaceOf(inside(".xterm", '[role="tabpanel"]'))).toBe("terminal");
+	expect(shortcutSurfaceOf(inside('[role="tab"]', "[data-review-surface]"))).toBe("review");
 });

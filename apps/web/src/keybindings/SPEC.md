@@ -23,7 +23,8 @@ does.
 - **Public surface:** `KeybindingId`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `matchKeybinding`,
   `keybindingShortcut`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
   `SHORTCUT_SURFACES`, `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`, `shortcutRows`,
-  `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`, `DESKTOP_KEYS`.
+  `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`,
+  `TRANSCRIPT_KEYS`, `HISTORY_KEYS`, `DESKTOP_KEYS`.
 - **Allowed deps:** `commands` (`CommandShortcut` and `shortcutKeys`), `lib` (`platformFamily`),
   `@thinkrail/locales` (the catalog's `MessageKey` titles, type-only).
 - **Forbidden:** importing `store`, `transport`, `shell`, `panels`, `chat`, `search` or React; reading
@@ -84,7 +85,8 @@ does.
 - **Not bound here:** `shell/shortcutCommands.ts` (close/quit/settings — native-owned and typed-key matched on
   purpose; `tab.close` only shows its `Mod+W`), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
   [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, and
-  feature-local keys (the palette's own `Mod+K` / `Mod+I`, Monaco, xterm). The catalog lists them;
+  feature-local keys (the palette's own `Mod+K` / `Mod+I`, Monaco, xterm), and extension chords (hint mode's
+  `F` / `Mod+;`, bound by the extension's own listener). The catalog lists them;
   it binds none. User rebinding, when it comes, is an override map over `KEYBINDINGS`.
 
 ## Shortcut catalog
@@ -97,13 +99,30 @@ does.
   marked `desktop` (native menu, `shortcutCommands`, page zoom) is listed only where the native shortcut
   bridge exists. The focus-group bindings are one row shown as a range (`⌘1–9`).
 - **Surfaces** are a fixed ordered set — general, tabs and groups, panels and tool rails, sidebar trees,
-  Changes review, chat input, search palette, Find in Files, terminal, desktop app — each titled by a
-  locale key; `shortcutRows({ desktop, platform })` resolves the catalog for one client into rows of
+  Changes review, chat input, chat transcript, chat history, search palette, Find in Files, terminal,
+  desktop app — each titled by a locale key; `shortcutRows({ desktop, platform })` resolves the catalog for one client into rows of
   caps and a text label (what the filter matches).
 - **Feature handlers keep their matching** (the table never dispatches feature keys) but read the key
   they compare from the catalog's constants — the tab strip and rails (`TAB_KEYS`, `RAIL_KEYS`), the
-  sidebar trees (`TREE_KEYS`: `F2`, `Delete`, `Mod+Enter`, project reorder), Changes review
-  (`REVIEW_KEYS`: `V` `J` `N` `P`, `Alt+↑/↓`) — so the listed and the handled key cannot drift; the
-  palette's zoom and Settings shortcuts read `DESKTOP_KEYS`. Keys that stay literal in their handler
-  (composer, palette, Find in Files, xterm, dictation) are display entries only.
+  sidebar trees (`TREE_KEYS`: `S` search, `F2`, `Delete`, `Mod+Enter`, project reorder), Changes review
+  (`REVIEW_KEYS`: `V` `J` `N` `P`, `Alt+↑/↓`), the chat transcript and the composer's way into it
+  (`TRANSCRIPT_KEYS`: `Mod+↑`, `C`, `O`), the history overlay's entry delete (`HISTORY_KEYS`), and the
+  letter twins of the arrows (`HJKL_KEYS`: h/j/k/l, shared by the transcript, tab strips, rails and
+  sidebar trees) — so
+  the listed and the handled key cannot drift; the palette's zoom and Settings shortcuts read
+  `DESKTOP_KEYS`. Keys that stay literal in their handler (composer, palette, Find in Files, xterm,
+  dictation, the transcript's arrows and the history overlay's other keys) are display entries only.
+- **Review surface keys are display entries too.** The diff line cursor, the Markdown block cursor, the
+  region frame, the swipe divider, the review composer and draft cards live in
+  `@thinkrail/resource-renderers`, which cannot import the app, so their handler reads its own
+  `support/cursorKeys.ts` ([[module-resource-renderers]], *Keyboard review surfaces*) and the Changes
+  review section lists the same chords (`review.cursorMove` … `review.swipeFar`). Moving them into
+  `@thinkrail/ui` would make the primitives package own one feature's key map, so they stay where they
+  are handled.
+- **Extension rows.** `shortcutRows({ desktop, platform, extra })` appends `extra` entries after the
+  catalog; `shell` passes the `shortcuts` of every enabled web extension as General rows
+  ([[submodule-web-extensions]]), so the catalog never imports an extension and a switched-off one's rows
+  disappear. Their chords are the extension's own (hint mode's `F` / `Mod+;`), never `KEYBINDINGS` entries;
+  `extensions`' tests pin that they match no table chord and that plain `F` is bound nowhere in the table
+  or the catalog's feature keys.
 - Tested: every `KeybindingId` belongs to a titled entry, ids are unique, every title is an English key.
