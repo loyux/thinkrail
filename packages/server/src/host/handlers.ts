@@ -31,6 +31,7 @@ import {
 	compactSession,
 	deleteSession,
 	disableAnthropicExtraUsageWarning,
+	disableSessionServerFallback,
 	ensureSessionAttached,
 	followUpSession,
 	getResourceHistoryPage,
@@ -51,6 +52,7 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	listSubagentCatalog,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	notifyExtUi,
@@ -205,7 +207,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, noteRecentModel, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
@@ -306,6 +308,7 @@ import {
 	mcpRevokeToolGrant,
 	mcpSetProjectOverride,
 	mcpSetSessionOverride,
+	mcpSetUserServer,
 	mcpShareWithRepo,
 	mcpTestConnection,
 	mcpUpdate,
@@ -1213,6 +1216,21 @@ const handlers: WsHandlers = {
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
 	},
+	"subagent.setEnabled": (p) => {
+		setSubagentEnabled(p?.name, p?.enabled);
+		return { ok: true };
+	},
+	"subagent.list": (p) => {
+		if (p.workspaceId === undefined) return listSubagentCatalog();
+		const ws = getWorkspace(p.workspaceId);
+		const project = listProjects().find((candidate) => candidate.id === ws.projectId);
+		const admission = admissionContextFor(
+			project,
+			ws.skillOverrides ?? {},
+			getConfig().otherAgentSkills,
+		);
+		return listSubagentCatalog(ws.worktreePath, admission.piResourceTrusted);
+	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
 	"packages.list": (p) => packagesList(p),
 	"packages.install": (p) => packagesInstall(p),
@@ -1367,6 +1385,7 @@ const handlers: WsHandlers = {
 		noteRecentModel(await setSessionModel(p.sessionId, p.model));
 		return { ok: true } as const;
 	},
+	"session.disableServerFallback": (p) => disableSessionServerFallback(p.sessionId),
 	"session.setThinkingLevel": (p) => {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
@@ -1433,6 +1452,7 @@ const handlers: WsHandlers = {
 	"mcp.setSessionOverride": (params) => mcpSetSessionOverride(params),
 	"mcp.approve": (params) => mcpApprove(params),
 	"mcp.shareWithRepo": (params) => mcpShareWithRepo(params),
+	"mcp.setUserServer": (params) => mcpSetUserServer(params),
 	"mcp.reconnect": (params) => mcpReconnect(params),
 	"mcp.login": (params, ctx) => mcpLogin(params, ctx.clientKey),
 	"mcp.logout": (params, ctx) => mcpLogout(params, ctx.clientKey),

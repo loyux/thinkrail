@@ -32,6 +32,7 @@ import {
 	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
+	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
@@ -54,6 +55,7 @@ import {
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	modelContextWindowLimits,
@@ -76,11 +78,13 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
+	SERVER_FALLBACK_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -279,6 +283,7 @@ test("the cache-warming setting names its two methods at v111", () => {
 	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
 	expect(isCacheWarmingMode("idle")).toBe(true);
 	expect(isCacheWarmingMode("always")).toBe(false);
+	expect(DEFAULT_CACHE_WARMING_MODE).toBe("streaming");
 });
 
 test("voice input is pinned to v107", () => {
@@ -403,6 +408,12 @@ test("extension editor text is pinned to v115", () => {
 	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
 });
 
+test("turning off server-side fallback is pinned to v126", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SERVER_FALLBACK_PROTOCOL_VERSION);
+	expect(SERVER_FALLBACK_PROTOCOL_VERSION).toBe(126);
+	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
+});
+
 test("continue in workspace is pinned to v110", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
@@ -506,6 +517,12 @@ test("always-allowed MCP tools and their revoke are pinned to v84", () => {
 	expect(MCP_TOOL_GRANTS_PROTOCOL_VERSION).toBe(84);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_TOOL_GRANTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpRevokeToolGrant).toBe("mcp.revokeToolGrant");
+});
+
+test("user-level MCP servers managed without a workspace are pinned to v125", () => {
+	expect(MCP_USER_SERVERS_PROTOCOL_VERSION).toBe(125);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_USER_SERVERS_PROTOCOL_VERSION);
+	expect(WS_METHODS.mcpSetUserServer).toBe("mcp.setUserServer");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {
@@ -756,4 +773,12 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("subagent catalog and per-name preference start at protocol 127", () => {
+	expect(WS_METHODS.subagentList).toBe("subagent.list");
+	expect(WS_METHODS.subagentSetEnabled).toBe("subagent.setEnabled");
+	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(127);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
 });

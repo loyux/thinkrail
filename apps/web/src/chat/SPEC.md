@@ -83,7 +83,20 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   provider); a retry fails until the user adds usage, waits for a reset, or connects an API key or another
   provider, after which any send continues the same chat (#1147). The signatures are a data table of pattern →
   usage URL + link label; linkifying URLs inside the error text was rejected because Anthropic's carries no
-  scheme. Neither affordance goes stale, so historical matching turns keep them. Only the current settlement-derived failure carries the
+  scheme. Neither affordance goes stale, so historical matching turns keep them. A **rejected-fallbacks**
+  error (`fallbacksRejected`: a proxy or gateway refusing pi's Anthropic server-side refusal fallback —
+  "does not support fallback field", `fallbacks: Extra inputs are not permitted`, an unknown/unrecognized
+  `fallbacks` argument) leads with a localized explanation above the provider text, since a retry sends the
+  same field again. On the current failure (the `try-again` recovery) with a v126 host, **Try again** becomes
+  **Turn off fallback and retry** (`disableServerFallback`, supplied by `ChatView`): `session.disableServerFallback`
+  turns fallback off for the model of the request that failed (the host reads it from pi's last assistant
+  message, not the chat's current model) and rebinds the chat to the updated model only if it is still on
+  that model, then the ordinary `Try again.` send follows — also after `SERVER_FALLBACK_NOT_USED` (no failed
+  request, or its model declares no fallbacks, e.g. a non-Fable turn whose error merely matched), since a
+  plain retry is then the answer. Another fallback model behind the same proxy fails once and offers the
+  same repair. The button is pending while it runs; a failure shows a localized alert line and
+  keeps the button. Historical matches keep the explanation only; an older host keeps plain **Try again**.
+  Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
@@ -612,20 +625,30 @@ labels, and below a 28rem prompt
 (`@container` / `@max-md`) every row stacks into one column so no two choices sit side by side by
 accident (the MCP order keeps Deny furthest from Always allow). It never takes focus from the composer.
 **Arrival:** `ChatTranscript` keeps one always-mounted polite live region outside virtualization and
-fills it a frame after each new request ("Your input is needed: <question>"), once per request; an
-anchored prompt's first mount reveals itself (`revealChatElement`, `automatic-attention`, `block:
-"nearest"` under the breadcrumb inset; the first pointer/key/wheel yields), later remounts do not
-(`PendingExtUi.claimReveal`). A row virtualized away gets no reveal; the live
-region and the needs-input marker still tell the user. **Bounds:** the docked prompt is capped at 60% of
-the chat height (`max-h-[60cqh]`); its body (question, field, select options) scrolls while Cancel/Submit
-and the hint stay put, and the editor is capped at 40%. On the way out, answering unmounts the focused control, so
+fills it a frame after each new request ("Your input is needed: <question>"), once per request. An
+anchored prompt reveals itself once (`revealChatElement`, `automatic-attention`, `block: "nearest"` under
+the breadcrumb inset; the first pointer/key/wheel yields), and only if it mounts within two frames of its
+request arriving in an open chat view; a view opened with the request already pending never reveals it.
+The live region and the needs-input marker still tell the user. A later reveal would take the reader away
+from where they scrolled or jumped, for example a Jump-to-message that lands near the card. The second
+frame is margin: a tool row that arrives with its dialog had its card mounted before the first frame in
+every measured Chromium run (prod and dev, up to 6x CPU throttle). *Trap:* a StrictMode re-run, or a new
+tool row that Virtuoso draws a commit late, queues the prompt's frame after `ChatTranscript`'s, so the
+prompt decides when it mounts (`PendingExtUi.revealOpen`) and `ChatTranscript` only closes the window.
+**Bounds:** the docked prompt is capped at 60% of the chat height (`max-h-[60cqh]`); its body (question,
+field, select options) scrolls while Cancel/Submit and the hint stay put, and the editor is capped at
+40%. On the way out, answering unmounts the focused control, so
 when the prompt still holds `:focus-visible` focus it hands focus back to the composer
 (`ChatActions.focusComposer`) instead of stranding it on `<body>`; a tap/click answer leaves focus alone. `ChatTranscript` owns the session's
-`pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft lives
-in that per-request `PendingExtUi` (`draft()` / `rememberDraft`), not in the prompt: folding a group
-open or shut, virtualization and the dock-to-card move remount the prompt, and the draft must survive
-them; a reply or dismissal ends the request and its draft with it. The draft is not persisted across a
-chat-view remount. A request whose `toolCallId` is in the
+`pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft and
+the reveal state belong to the request, not the prompt: folding a group open or shut, virtualization and
+the dock-to-card move remount the prompt, and both must survive them; a reply or dismissal ends the
+request and its draft with it. `usePendingExtUi` keeps both in a `WeakMap` in `useState`, keyed by the
+store's request object, so a chat-view remount drops the draft. *Trap (#1357):* a `let` inside the memo
+that builds `PendingExtUi` is not per request. The React Compiler creates closures that capture no
+reactive value once per chat view, so every later input or editor dialog showed the last typed text, and
+no anchored dialog after the first revealed itself. *Rejected:* the request id as the key (the host
+numbers dialogs `extui_<n>` from 1 again after a restart). A request whose `toolCallId` is in the
 rows (`rowsHaveToolCall`) asks **on that tool**: the tool shell — `ToolCard`, the routine step row and a
 bare tool's wrapper — renders `ToolPromptSlot` under its header regardless of the tool's own fold, so no
 renderer needs prompt code (the MCP approval included). A request carrying `toolInput` lists it **inside
@@ -744,7 +767,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
   card uses both and hides the open action when there is no provider.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
-  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
+  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. `disableServerFallback()` is supplied only
+  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v126) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
   servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
@@ -1070,7 +1094,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   within the slot on narrow panes while its complete live-region text remains accessible. Starting, changing,
   or ending a phase therefore moves neither transcript alignment nor composer.
 - **Tool attention preserves alignment provenance** — an automatic attention reveal (an anchored extension
-  prompt's first mount) leaves following or detached exactly as it found it and cannot expose the button. A
+  prompt on arrival) leaves following or detached exactly as it found it and cannot expose the button. A
   reader who was already detached keeps the affordance because of that prior action. A docked interactive
   call never reveals: it renders outside the list (the interaction dock below). All attention, history,
   breadcrumb, and row reveals route through the same controller. A history row outside
@@ -1158,8 +1182,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
-  pre-session mode; `ModelsSettings` still mounts the older `ModelSelector` +
-  `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
+  pre-session mode and by Settings › Models for its Chat model and Review model pairs — the Settings
+  props are below). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
   [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
   `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
@@ -1208,9 +1232,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
   found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s
-  `selectPickerModels`, which keeps the current model. Settings' `ModelSelector` shares this grouping,
-  filter, Pinned section, empty states and "Updating…" Refresh, without Recent or the header connection
-  detail. A trailing query word that names a
+  `selectPickerModels`, which keeps the current model. **Settings mounts the same picker** with three
+  additive props the composer never passes: `canSetDefault={false}` drops **Set as default** (the Chat
+  model row *is* the default, and the Review pair must not overwrite it), `tabIndex={0}` gives the
+  trigger the explicit tab stop WebKit's Tab needs, and `fitContainer` bounds the popover's position,
+  height and width by `container` — the dialog's transformed, overflow-clipped root, which would
+  otherwise cut off whatever pokes past it. The popover renders into that root (so the modal's scroll
+  lock lets the wheel reach its list), outside the section pane, so Settings' arrow walk never sees the
+  picker's keys: Enter or Space on the trigger opens it, the picker's own keys apply inside, Escape
+  closes it with focus back on the trigger, and the search field holds focus, so plain F types and hint
+  mode comes with Mod+;. A trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
   text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
@@ -1256,7 +1287,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   latter reused by `panels` pre-session). Group state reads through the contracts' `isSkillGroupEnabled`
   with `store.otherAgentSkills`, so the switches match the host gate; while that host default is off and a
   Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
-  Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated listing
+  Settings → Extensions & skills. A `skills-size` line shows the loaded skills' count and an estimated listing
   size (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an estimate
   rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never lists it).
   Up to the host listing budget's floor (`SKILL_LISTING_MIN_TOKENS`) it is the per-request cost; past it,
@@ -1517,7 +1548,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
   `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
-  deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
+  deep-links to Settings → Prompt templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
   and the manager is otherwise two clicks deep in a dialog. Gated on "no templates exist", never on "the
   current query matched none", so a query that simply misses doesn't raise it; `footer` is optional, so
@@ -1622,11 +1653,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   has no ChatView spinner or transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
-  entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
+  entry points that never talk to each other: the Settings → Prompt templates panel (list + New/Edit/Delete, see
   `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
   not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
-  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`ModelSelector`/
-  `ThinkingSelector`/`Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
+  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`Markdown`) but
+  never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
@@ -1697,8 +1728,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
-    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` anchored to
-    the row's own Delete button. A **rejected
+    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmDialog` (the row's
+    Delete side or the Delete key). A **rejected
     delete** is the one deliberate asymmetry with Save: it surfaces as an error toast, not inline (there's
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.

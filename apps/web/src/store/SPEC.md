@@ -75,6 +75,13 @@ first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the b
 re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
 (`mcpState`) because the props-only chat resources module shares them.
 
+## Agent availability
+
+`disabledSubagents` mirrors `AppConfig.disabledSubagents` through the welcome/`applyConfig` fold (`[]` from
+an older host); the roster's switches render only it. `selectActiveSubagentProjectTrust` is the active
+repository workspace's project `piResourceTrust` (undefined for a chat or no workspace), which keys the
+roster's catalog reads ([[submodule-web-panels]]).
+
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
@@ -541,7 +548,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `beginLogin` response. **`beginLogin(loginId, providerId, target?)`** opens the login, preserving a
   matching frame-created dialog (the frame can beat the response) and refusing to overwrite a different
   active login. Workspace removal retires its targeted MCP dialog; late start responses and frames for
-  tombstoned workspaces cannot recreate it or strand the global login slot.
+  tombstoned workspaces cannot recreate it or strand the global login slot. A target without a
+  `workspaceId` (an MCP sign-in started with no workspace open) is never tombstoned.
   **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
@@ -551,12 +559,18 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   provider's finished (success/error) target-less login. A terminal frame for a login this client does not
   hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
   so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
-  the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
-  sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
-  Chat/Appearance and Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
-  **`closeSettings()`** / **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider
-  warning, and update-ready shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Subagents`/`Mcp`/`Github`/`Appearance`/`Text`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`/`Environment`/`Voice`/`Language`;
+  the retired `Artifacts`, `LineWidth` and `Review` keys stay so old deep links still type-check, and
+  **`RETIRED_SETTINGS_SECTIONS`** names where each moved — Layout, Text and Models — for `panels/settingsNav`
+  to resolve) with **`openSettings(section?, settingId?)`** / **`closeSettings()`** / **`setSettingsSection()`**
+  — lives here so the top-bar gear, Welcome provider warning, and update-ready shell affordance can deep-link
+  without prop-drilling. Without a section, `openSettings` reopens the remembered one: `closeSettings` keeps
+  `settingsSection`, in memory only, so the first open of a page load is Providers. A `settingId` (a
+  `panels/settingsCatalog` id, or `shortcut:<command>`) is stored as **`settingsTarget`** in the same update;
+  the dialog takes it once with **`consumeSettingsTarget()`**, which returns and clears it, and a close or an
+  open without one clears it too. The client-local preference defaults the store starts from
+  (`artifactsSmart`, `doubleShiftSearch`, `markdownOutlineSide`) are one constant,
+  **`CLIENT_PREFERENCE_DEFAULTS`**, which Settings' Reset reads too. The optional Update key is navigation only. Native
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
@@ -935,6 +949,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`, `selectSupportsMcp`,
   and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
+  `selectSupportsServerFallbackRepair` (the `SERVER_FALLBACK_PROTOCOL_VERSION` gate for the chat's
+  rejected-fallbacks repair);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
   `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types

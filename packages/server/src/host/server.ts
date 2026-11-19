@@ -84,6 +84,7 @@ import {
 	setSkillAdmissionResolver,
 	setSpecsEnabledResolver,
 	setSubagentConcurrencyResolver,
+	setSubagentEnabledResolver,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleCredentialWritesForShutdown,
@@ -107,7 +108,6 @@ import {
 } from "../artifacts";
 import {
 	cancelAllLogins,
-	initializeJbcentralRuntime,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
 	setLoginPublisher,
@@ -213,6 +213,7 @@ import {
 	workspaceCreationHandoff,
 } from "./handlers";
 import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
+import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -368,7 +369,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	} catch (error) {
 		log.warn(`chats without a project are unavailable: ${String(error)}`);
 	}
-	await initializeJbcentralRuntime();
+	await initializeHostRuntime();
 	getConfig();
 	setPiTrustSeed(piTrustsProjectPath);
 	const {
@@ -906,6 +907,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		grantProjectMcpTool(getWorkspace(workspaceId).projectId, server, target, tool);
 	});
 
+	setSubagentEnabledResolver((name) => !getConfig().disabledSubagents.includes(name));
 	setSubagentsEnabledResolver((workspaceId) => {
 		try {
 			return resolveSubagentsEnabled(getConfig().subagentsEnabled, getWorkspace(workspaceId));
@@ -930,7 +932,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
-	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
@@ -1325,6 +1326,7 @@ function restoreSeamDefaults(): void {
 	setSkillAdmissionResolver(null);
 	setMcpPolicyResolver(null);
 	setMcpToolGrantWriter(() => {});
+	setSubagentEnabledResolver(null);
 	setSubagentsEnabledResolver(null);
 	setSubagentConcurrencyResolver(null);
 	setAgentReviewEnabledResolver(null);

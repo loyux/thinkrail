@@ -39,7 +39,7 @@ import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityB
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { refreshContinuation, requestContinuation } from "./continuations";
-import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
+import { PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { workspaceFileTarget } from "./fileTargets";
 import { FoldGeometryProvider } from "./foldState";
 import {
@@ -52,6 +52,7 @@ import {
 } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { openWorkspace } from "./openWorkspace";
+import { usePendingExtUi } from "./pendingExtUi";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import {
@@ -235,6 +236,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput?: ChatActions["readMcpOutput"];
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
+		disableServerFallback?: ChatActions["disableServerFallback"];
 		findModel?: ChatActions["findModel"];
 		dockTarget?: HTMLElement | null;
 		onDockedInteractionChange?: (toolCallId: string | null) => void;
@@ -259,6 +261,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput,
 		openMcpSettings,
 		openProviderSettings,
+		disableServerFallback,
 		findModel,
 		dockTarget,
 		onDockedInteractionChange,
@@ -634,30 +637,12 @@ const ChatTranscript = forwardRef<
 	);
 
 	const pendingExtUiRequest = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
-	const pendingExtUi = useMemo<PendingExtUi | null>(() => {
-		if (!pendingExtUiRequest) return null;
-		let draft: string | undefined;
-		let revealed = false;
-		return {
-			request: pendingExtUiRequest,
-			reply: (value) => {
-				const { id } = pendingExtUiRequest;
-				useAppStore.getState().clearPendingExtUi(sessionId, id);
-				getTransport()
-					.request("session.extUiReply", { response: { id, value } })
-					.catch(() => {});
-			},
-			draft: () => draft,
-			rememberDraft: (text) => {
-				draft = text;
-			},
-			claimReveal: () => {
-				if (revealed) return false;
-				revealed = true;
-				return true;
-			},
-		};
-	}, [pendingExtUiRequest, sessionId]);
+	const pendingExtUi = usePendingExtUi(pendingExtUiRequest, ({ id }, value) => {
+		useAppStore.getState().clearPendingExtUi(sessionId, id);
+		getTransport()
+			.request("session.extUiReply", { response: { id, value } })
+			.catch(() => {});
+	});
 	const pendingExtUiId = pendingExtUiRequest?.id ?? null;
 	const [announcedExtUiId, setAnnouncedExtUiId] = useState<string | null>(null);
 	useEffect(() => {
@@ -735,6 +720,7 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			disableServerFallback,
 			findModel,
 			continuationOf,
 			retryContinuation: (details) => {
@@ -760,6 +746,7 @@ const ChatTranscript = forwardRef<
 		[
 			cancelAutomaticReveal,
 			continuationOf,
+			disableServerFallback,
 			findModel,
 			focusComposer,
 			landingChord,

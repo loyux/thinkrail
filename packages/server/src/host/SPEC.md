@@ -13,6 +13,16 @@ tags: [host, public-surface-checked]
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
 channel fan-out, and the process-boot wrapper both launchers share.
 
+## Subagent catalog
+
+`subagent.list` takes an optional `workspaceId`, never a caller cwd: the host resolves the registered
+workspace and passes its worktree and `admissionContextFor(...).piResourceTrusted` to agent's metadata-only
+`listSubagentCatalog`, so without a workspace or pi-resource trust only built-in and personal definitions
+are read. Each read rediscovers files; there is no catalog state or push. `subagent.setEnabled` delegates
+to settings' `setSubagentEnabled` ([[submodule-server-settings]]). The host injects
+`getConfig().disabledSubagents` as agent's live per-name resolver and resets it on stop. Wire shape and
+gate: [[module-contracts]].
+
 ## Boundary
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
@@ -246,9 +256,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
   install the crash report, await the login-shell environment when the launcher passed
   `resolveShellEnv: true` (started before `initLogging`), apply the stored host environment
-  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same Central watcher/runtime
-  initialization before choosing the serving port, await `createServer` (which idempotently enforces
-  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
+  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same runtime initialization
+  `createServer` runs (`hostRuntime.ts`'s `initializeHostRuntime`: install the persisted `disabledPackages`
+  resolver, then the Central watcher/runtime, so the first generation's user-extension pass never runs a
+  switched-off package) before choosing the serving port, await `createServer` (which idempotently enforces
+  that bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
   into analytics (source `desktop`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
@@ -281,6 +293,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
   saved defaults and pi's global default still take precedence, including environment-backed ones. This
   changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `session.disableServerFallback` delegates to agent's `disableSessionServerFallback`;
   `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
@@ -293,7 +306,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
-  invalidations. Every request resolves its workspace and that workspace's project. Management mutations
+  invalidations. Every request that names a workspace resolves it and its project; one without (user scope
+  only, `MCP_USER_SERVERS_PROTOCOL_VERSION`) resolves none: the list is agent's `listUserMcpServers`,
+  mutations and probes are admitted by the ownership guard over agent's `userMcpContext()` (pi's agent dir
+  as cwd, untrusted, empty policy, no live owners), project scope is refused with `MCP_CONFIG_INVALID`,
+  every write reconciles all workspaces' live chats, and `mcp.setUserServer` checks the global entry's
+  rendered fingerprint in the same synchronous step as agent's `setUserMcpEntryFields` writes `enabled` /
+  `exposure`. Workspace-scoped management mutations
   and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
   in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
   for retry; approvals and overrides come from the latest record, not the pre-await snapshot. Project
@@ -322,7 +341,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   runs agent's `reconnectMcpServer` (pi's notices stay out of the chat; pi's failure, masked, is the
   request's error) and refreshes that chat's status either way;
   `mcp.readOutput` reads agent's `readMcpToolOutput` for a session of that workspace only;
-  `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
+  `mcp.readLog` resolves the workspace when one is named, checks the name against pi's charset and returns agent's
   `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
   `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
   its `loginId` (`mcp.logout` awaits the probe). Probe admission resolves the valid effective server from
@@ -488,7 +507,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `AppConfig.extensionSettings` the same way (cleared on shutdown), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
   so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
-  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
+  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages` (installed by `initializeHostRuntime`,
+  before any runtime generation), a change to either list calls
   `refreshExtensionTools()`, and `host/packages.ts` answers the `packages.*` methods by mapping an
   optional `workspaceId` onto the checkout plus a fresh project-trust thunk (`host/mcp.ts`'s shape) and
   delegating to the `agent` façade; a confirmed `packages.install` also drops the new identity from
