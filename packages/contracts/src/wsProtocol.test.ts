@@ -36,8 +36,10 @@ import {
 	customMessageText,
 	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -45,6 +47,7 @@ import {
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCacheWarmingMode,
 	isCustomEndpointId,
@@ -104,6 +107,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
+	type WsErrorCode,
 } from "./wsProtocol";
 
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
@@ -383,6 +387,21 @@ test("host search and its previews are pinned to v106", () => {
 	expect(SEARCH_PROTOCOL_VERSION).toBe(106);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
+});
+
+test("the community catalog is pinned to v132", () => {
+	expect(PROTOCOL_VERSION).toBe(132);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
+	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
+});
+
+test("installed extensions are pinned to v131", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(131);
+	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
+	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
+	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
+	expect(WS_CHANNELS.extensionsChanged).toBe("extensions.changed");
 });
 
 test("spec sections in search are pinned to v113", () => {
@@ -780,6 +799,14 @@ test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("extension queries are pinned to v130 with their two refusal codes", () => {
+	expect(EXTENSION_QUERY_PROTOCOL_VERSION).toBe(130);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_QUERY_PROTOCOL_VERSION);
+	expect(WS_METHODS.extensionQuery).toBe("extension.query");
+	const refusals: WsErrorCode[] = ["EXTENSION_DISABLED", "UNKNOWN_EXTENSION_QUERY"];
+	expect(refusals).toHaveLength(2);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

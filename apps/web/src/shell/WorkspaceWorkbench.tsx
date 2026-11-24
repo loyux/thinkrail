@@ -31,7 +31,12 @@ import {
 	type ResolvedKeybindings,
 	SUGGESTION_KEYS,
 } from "../keybindings";
-import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
+import {
+	type ChatAction,
+	chatDisplayName,
+	type LayoutAttention,
+	layoutResourceIdentity,
+} from "../lib";
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
@@ -82,12 +87,16 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
+import { releaseClosedTab } from "./closedTab";
+import { ExtensionPanelBody, useExtensionChatPane } from "./ExtensionPanelBody";
+import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	type LayoutAuxiliaryRegion,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -106,7 +115,6 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
-import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
@@ -228,15 +236,18 @@ function ChatResourceBody({
 	onOpenFile,
 	landingChord,
 	suggestionShortcuts,
+	chatActions,
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
 	landingChord: string;
 	suggestionShortcuts: readonly SuggestionShortcut[];
+	chatActions: readonly ChatAction[];
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const pane = useExtensionChatPane(workspaceId, tab.sessionId);
 	const [stalled, setStalled] = useState(false);
 	useEffect(() => {
 		if (available) return;
@@ -258,6 +269,8 @@ function ChatResourceBody({
 						onOpenFile={onOpenFile}
 						landingChord={landingChord}
 						suggestionShortcuts={suggestionShortcuts}
+						chatActions={chatActions}
+						pane={pane}
 					/>
 				</Suspense>
 			</ErrorBoundary>
@@ -431,6 +444,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chromeShortcuts = useMemo(() => workbenchChromeShortcuts(keybindings), [keybindings]);
 	const landingChord = keybindingLabel(keybindings, "region.next");
 	const chipShortcuts = useMemo(() => suggestionShortcuts(keybindings), [keybindings]);
+	const chatActions = useChatActions();
+	const chatTabActions = useChatTabActions(workspaceId, chatActions);
+	const railFooter = useLeftRailFooter();
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -519,10 +535,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const commit = useCallback(
-		(next: WorkspaceLayoutDocument, nextAttention?: LayoutAttention) => {
+		(
+			next: WorkspaceLayoutDocument,
+			nextAttention?: LayoutAttention,
+			panelsToRestore?: readonly LayoutAuxiliaryRegion[],
+		) => {
 			void commitWorkspaceLayout(workspaceId, next, {
 				...(document ? { baseDocument: document } : {}),
 				...(nextAttention ? { attention: nextAttention } : {}),
+				...(panelsToRestore ? { panelsToRestore } : {}),
 			}).catch(() => {});
 		},
 		[document, workspaceId],
@@ -675,6 +696,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						onOpenFile={openToolFile}
 						landingChord={landingChord}
 						suggestionShortcuts={chipShortcuts}
+						chatActions={chatActions}
 					/>
 				);
 			}
@@ -695,6 +717,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						</Suspense>
 					</ErrorBoundary>
 				);
+			}
+			if (tab.kind === "extension") {
+				return <ExtensionPanelBody workspaceId={workspaceId} tab={tab} />;
 			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
@@ -723,6 +748,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
 		[
+			chatActions,
 			chipShortcuts,
 			deletedSessions,
 			document,
@@ -752,6 +778,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						newWorkspaceShortcut={keybindingKeys(keybindings, "workspace.new", {
 							browser: !nativeShortcuts,
 						})}
+						chatActions={chatActions}
 					/>
 				</QuietScrollArea>
 			),
@@ -810,6 +837,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	}, [
 		artifacts.failed,
 		artifacts.reload,
+		chatActions,
 		isChat,
 		keybindings,
 		nativeShortcuts,
@@ -1002,7 +1030,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(focusRequest ? { focusRequest } : {})}
 				registerTabCommands={registerTabCommands}
 				chromeShortcuts={chromeShortcuts}
-				renderLeftRailFooter={renderShortcutsRailButton}
+				leftRailFooter={railFooter}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}
@@ -1014,6 +1042,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
+				{...(chatTabActions ? { chatActions: chatTabActions } : {})}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {
@@ -1066,21 +1095,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									? { document: current, attention: currentAttention }
 									: undefined,
 							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
-									}
-								}
-							}
+							releaseClosedTab(workspaceId, tab);
 						})
 						.catch(() => {});
 				}}
